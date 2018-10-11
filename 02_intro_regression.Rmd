@@ -1,0 +1,476 @@
+---
+title: "Linear Regression"
+output: 
+  html_document: 
+    toc: true 
+    toc_depth: 2
+---
+
+
+# Objectives
+
+- Set up a linear regression model.
+- Interpret the parameters of a regression model.
+- Communicate a model descriptions to others.
+- Fit regression models in **brms**.
+- Basics of summarizing and visualizing a model fit.
+
+```{r message = F, results = 'hide'}
+library(tidyverse)
+library(modelr)
+library(brms)
+library(tidybayes)
+
+theme_set(theme_bw())
+```
+
+
+# Linear regression
+
+Linear regression refers to a large family of statistical models which attempt to learn about the mean and variance of some measurement, using an additive combination of other measures. Linear regression is a descriptive model that corresponds to many different processes.
+
+Normally regression is presented as a way of representing the relationship between variables. I believe this description obscures the interpretation of regression results. Instead, we're going to think of linear regression as a method that summarizes how the average values of a numerical outcome variable vary over subpopulations defined by linear functions of predictors. 
+
+Regression can be used to predict an outcome given a linear function of those predictors, and regression coefficients can be thought of as comparisons across predicted values or as comparisons among averages in the data. A regression coefficient describe the expected change in the response per unit change in its predictor.
+
+We're also going to be discussing linear regression from a Bayesian perspective. Linear regression uses a Gaussian/Normal distribution to describe our uncertainty about a measurement of interest. Like any model, this is not universally applicable. But linear regression is pretty foundational because once you can build and interpret linear regression, it is easy to move on to other types of regression for when things aren't Normal.
+
+Models of normally distributed data are very common: t-test, single regression, multiple regression, ANOVA, ANCOVA, MANOVA, MANCOVA, etc. All of these models are functionally equivalent. Learning and understanding each of these special cases is a lot of unnecessary work. We're going to learn a single means of communicating a model and all of its assumptions.
+
+
+## Talking about models
+
+Here are the choices encoded in a model description:
+
+1. An outcome variable or variables that we hope to predict or understand ($y$).
+2. Likelihood distribution that defines the plausibility of individual observations.
+3. Predictors or covariates; a set of other measurements that we hope to use to predict or understand the outcome ($X$).
+4. Relation between the shape of the likelihood distribution (e.g. location and scale) to the predictor variables. The nature of this relation forces us to define all the parameters of the model.
+5. Priors for all of the parameters in the model.
+
+Here's the globe tossing model from last week
+$$
+\begin{align} 
+  w &\sim \text{Binomial}(n, p) \\
+  p &\sim \text{Uniform}(0, 1). \\
+\end{align}
+$$
+Identify the parts of this model description. (Hint: there are no predictors or covariates.)
+
+It is ok if you do not immediately understand this notation; that's a normal part of learning. One of our goals is to learn this notation so that we can specify and communicate our model clearly so that other people can understand what we're doing. This language is general, and can be used to describe all model types.
+
+The $\sim$ symbol indicates a stochastic relationship. A stochastic relationship means that the variable or parameter is mapped onto a distribution of values. It is stochastic because no single instance of the variable on the left is known with certainty. This relationship is probabilistic as some values are more plausible than others, though there are many plausible values under any model.
+
+
+## Growing a regression model
+
+We're going to use a real dataset and slowly build up a regression model. We will begin with a proto-regression model and then add predictors.
+
+We want a measurement variable to model as a Gaussian distribution. The Gaussian distribution has two parameters describing the shape of the distribution -- mean $\mu$ and standard deviation $\sigma$. The way Bayesian updating works means we want to consider all possible combinations of $\mu$ and $\sigma$ and rank them by posterior plausibility. The posterior is in effect a distribution of plausible Gaussian distributions.
+
+The dataset we're going to have fun with as part of today's activities is the Bivalve and Brachiopod body size data from [Payne et al. 2014 ProcB](http://rspb.royalsocietypublishing.org/content/281/1783/20133122.long). Their data includes location, age, type, and valve length. Load the "occurrence" tab-delimited file and start exploring the distribution of body sizes. 
+```{r}
+r <- read_tsv('./payne_bodysize/Occurrence_PaleoDB.txt') # grabbing from subdirectory
+
+# modify raw data for use
+# genus can occur 1+ times
+(d <- r %>%
+   group_by(taxon_name, taxon) %>%
+   dplyr::summarize(size = mean(size)) %>% # is this always a good idea?
+   mutate(size_log = log(size)) %>%    # log transform
+   ungroup())
+
+# look at the data
+d %>% 
+  gather(key, value, size, size_log) %>%
+  ggplot(aes(x = value)) + 
+  stat_bin() +
+  facet_grid(~ key, scales = 'free_x', switch = 'x') +
+  labs(x = 'valve length')
+```
+
+To define the log valve length as Gaussian distributed with mean $\mu$ and standard deviation $\sigma$, we write
+$$
+s_{i} \sim \text{Normal}(\mu, \sigma)
+$$
+What do the different parts of this definition mean?
+
+To complete this model we need to define the priors for the parameters $\mu$ and $\sigma$. We need a joint prior $Pr(\mu, \sigma)$, but most of the time we'll just define independent priors for each parameter -- this is equivalent to saying $Pr(\mu, \sigma) = Pr(\mu)Pr(\sigma)$. Here's a more complete look at the Gaussian model of log valve length:
+$$
+\begin{align}
+  s_{i} &\sim \text{Normal}(\mu, \sigma) \\
+  \mu &\sim \text{Normal}(3, 10) \\
+  \sigma &\sim \text{Uniform}(0, 20) \\
+\end{align}
+$$
+What do each of these three lines mean? 
+
+Let's discuss the choice of priors for $\mu$ and $\sigma$. It is a good idea to plot your priors so that you can better understand your assumptions.
+```{r}
+# prior for mean of log valve length
+ggplot(data = tibble(x = seq(from = -50, to = 50, by = .1)),
+       aes(x = x, y = dnorm(x, mean = 3, sd = 10))) +
+  geom_line() + 
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = expression(mu))
+
+# prior for standard deviation of log valve length
+ggplot(data = tibble(x = seq(from = 0, to = 30, by = .1)),
+       aes(x = x, y = dunif(x, min = 0, max = 20))) +
+  geom_line() +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = expression(sigma))
+```
+
+But what do these distributions *mean* for the distribution of log valve lengths? These individual priors imply the full distribution of lengths, so let's simulate them together and plot those results:
+```{r}
+n <- 1e4                               # number of samples
+
+tibble(sample_mu = rnorm(n, mean = 3, sd = 10),
+       sample_sigma = runif(n, min = 0, max = 20)) %>%
+  mutate(x = rnorm(n, mean = sample_mu, sd = sample_sigma)) %>% # joint distribution
+  ggplot(aes(x = x)) +
+  stat_density() +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = expression(paste("Prior predictive distribution for ", italic(s[i]))))
+```
+
+The resulting distribution describes the relative prior plausibilities we've defined for the distribution of log valve lengths. Play around with the numbers in the priors and see its effect on the prior probability density of log valve lengths.
+
+
+### Sampling from the model
+
+Now that we've completely defined out model (likelihood, data to condition on, parameters, and priors for all parameters) we can estimate the posterior plausibilities of our parameter values.
+
+We're going to use the **brms** package to fit our model. This package was briefly introduced at the end of last lesson, and we're going to get more experience with it today. After we fit the model, we'll use functions from **tidybayes** that will help us extract and visualize our posterior distribution.
+```{r cache = T, message = F, results = 'hide'}
+m_1 <- brm(data = d, 
+          family = gaussian(), 
+          formula = bf(size_log ~ 1), 
+          prior = c(prior(normal(3, 10), class = Intercept), 
+                    prior(uniform(0, 20), class = sigma)),
+          iter = 2000,                 # default
+          warmup = 1000,               # 1/2 iter
+          chains = 4,                  # each chain is a set of samples
+          cores = 4,                   # parallel processing; this might not work on your computer
+          refresh = 0)                 # less text output
+```
+```{r}
+# what does the brm object look like?
+print(m_1)
+
+# what do the estimates and chains look like?
+plot(m_1)
+
+# what are the parameter named?
+get_variables(m_1)
+
+# extract the samples
+m_1 %>%
+  spread_draws(b_Intercept, sigma)
+```
+
+We now have 4000 samples from the joint posterior. How do we want to summarize them? Here are some examples:
+```{r}
+# median and 95% quantile interval
+m_1 %>%
+  gather_draws(b_Intercept, sigma) %>%
+  median_qi()                          # ?brms::point_interval for documentation
+
+# posterior predictive distribution
+m_1 %>% 
+  add_predicted_draws(newdata = d,     # original data gives to simulate from
+                      model = .,       # the model we want the PPD from
+                      n = 100) %>%     # how many draws from PPD per observation
+  ggplot(aes(x = .prediction, group = .draw)) +
+  geom_line(stat = 'density', 
+            alpha = 0.1, 
+            colour = 'blue') +
+  geom_line(stat = 'density', 
+            data = d,                  # compare to original data distribution
+            mapping = aes(x = size_log, 
+                          group = NULL), 
+            colour = 'black',
+            size = 1.5) +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = 'log valve length')
+```
+
+
+## Adding a predictor to the mix
+
+Currently, our model doesn't really resemble what we think of as "regression." Typically, we want to understand how the outcome is related to some predictor variable. 
+
+Let's ask a basic questions: do Bivalves and Brachiopods differ in valve length? Start by looking at the data.
+```{r}
+d %>%
+  mutate(taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda')) %>% # make text clearer 
+  ggplot(aes(x = taxon, y = size_log)) +
+  geom_violin(fill = 'grey60', colour = NA) +
+  geom_jitter(height = 0, alpha = 0.5) +
+  labs(x = 'taxon', y = 'log valve length')
+```
+
+To build a linear model the strategy is to make the parameter for the mean of the Gaussian distribution, $\mu$, in a linear function of the predictor variable and other, new parameters we invent. A linear model means that we assume that the predictors have a perfectly constant and additive relationship to the mean of the outcome.
+
+Currently, our model looks like this:
+$$
+\begin{align}
+  s_{i} &\sim \text{Normal}(\mu, \sigma) \\
+  \mu &\sim \text{Normal}(3, 10) \\
+  \sigma &\sim \text{Uniform}(0, 20) \\
+\end{align}
+$$
+
+How do we add "Bivalve vs Brachiopod" to our model of valve size? 
+
+First, let the mathematical name of the column "taxon" from the tibble `d` be called $x$. This variable $x$ is a predictor variable that can take one of two values: 0 for Biv, and 1 for Bra. Additionally, this vector has the same length as $s$. How do we then express how $x$ describes or predicts the values of $s$?
+
+To get taxonomic group into the model, we need to define $\mu$ as a function of the values in $x$. Here's how we could do this:
+$$
+\begin{align}
+  s_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
+  \mu_{i} &= \alpha + \beta x_{i}\\
+  \alpha &\sim \text{Normal}(3, 10) \\
+  \beta &\sim \text{Normal}(0, 10) \\
+  \sigma &\sim \text{Uniform}(0, 20) \\
+\end{align}
+$$
+What do each of the lines in the model represent? What has changed and why?
+
+Where did $\alpha$ and $\beta$ come from? We made them up! $\mu$ and $\sigma$ are necessary and sufficient for describing the Gaussian distribution. $\alpha$ and $\beta$ are devices we invent for manipulating $\mu$, allowing it vary across cases in our data.
+
+Making up new parameters like $\alpha$ and $\beta$ is a common strategy for expanding the amount of information in our model. These parameters are targets of our learning -- each must be described in the posterior density. When we want to learn something, we invent a parameter (or parameters) describing it.
+
+In the case of the linear model, $\mu_{i} = \alpha + \beta x_{i}$, we are now asking two questions about the mean of $s$ instead of just one.
+
+1. What is the expected log valve length when $x_{i} = 0$ (e.g. species is a Bivalve)? The parameter $\alpha$ answers this question. For this reason, $\alpha$ is called the *intercept*.
+2. What is the change in expected log valve length, when $x_{i}$ changes by 1 unit? The parameter $\beta$ answers this questions, and is often called a slope.
+
+These two parameters along with $x$ describe a line that passes through $\alpha$ when $x_{i} = 0$ and has slope $\beta$.
+
+Remember that $x$ is a binary vector -- it only takes on one of two values: 0 or 1. For a binary predictor, the regression coefficient is the difference between the averages of the two groups.
+
+Let's think more about this choice of prior. Do you think there is an equal chance that average brachiopod valves are larger or smaller than bivalves? In this context, we have so much data that this is harmless. In other contexts, our sampler might need more information to finds its target.
+
+So let's fit the model:
+```{r cache = T, message = F, results = 'hide'}
+m_2 <- brm(data = d, 
+           family = gaussian(),
+           formula = size_log ~ 1 + taxon,
+           prior = c(prior(normal(3, 10), class = Intercept),
+                     prior(normal(0, 10), class = b),
+                     prior(uniform(0, 20), class = sigma)), 
+           iter = 2000,                # default
+           warmup = 1000,              # 1/2 iter
+           chains = 4,                 # each chain is a set of samples
+           cores = 4,                  # parallel processing; this might not work on your computer
+           refresh = 0)                # less text output
+```
+```{r}
+# look at the brm summary
+print(m_2)
+
+# look at the brm plot
+plot(m_2)
+```
+
+
+### Aside: Dummy coding
+
+`brm` and R in general will automatically translate categorical predictors like our taxon variable into what's called *dummy coding*. Here's an illustration of what that means using the subtype veteran from our raw data:
+```{r}
+r %>%
+  distinct(sub)
+
+r %>%
+  model_matrix(~ sub) %>%              # from modelr
+  distinct()
+
+r %>%
+  model_matrix(~ sub)
+```
+
+One of the values of the column is designated to be the intercept. In R, the default intercept is the first value of the vector, alphabetically.
+
+
+## Interpreting the model fit
+
+There are two broad categories of how we process model fit: tables, and plotting. Tables are fine, but plotting is key. It is easy to feel like you understand a table while still getting it wrong.
+
+Plotting the implications of your estimates will allow you to inquire about several things that are sometimes hard to read from tables:
+
+1. Whether or not the model fitting procedure worked correctly.
+2. The *absolute* magnitude, rather than merely *relative* magnitude, or a relationship between outcome and predictor.
+3. The uncertainty surrounding an average relationship.
+4. The uncertainty surrounding the implied predictions of the model, as these are distinct from mere parameter uncertainty.
+
+With practice extracting estimates from your model and plotting them, you can ask any question you can think of, for any model.
+
+Let's start by getting a basic summary of our posterior:
+```{r}
+m_2 %>%
+  gather_draws(b_Intercept, b_taxonBra, sigma) %>%
+  median_qi()
+```
+
+The first row corresponds to the model intercept, which we called $\alpha$. This parameter corresponds to the expected log valve length when $x = 0$. In the case of this model, this is easily interpreted as the expected log valve length of a Bivalve species. 
+
+The second row is the slope term $\beta$. This parameter describes the expected change in log valve size associated with unit change in $x$. In this case of this model, this parameter is easier to describe: this is an estimate of the expected difference in log valve length between Bivalves ($x = 0$) and Brachiopods ($x = 1$). By adding $\beta$ and $\alpha$, we get the estimate for Brachiopod expected log valve length.
+
+The third line is the standard deviation term $\sigma$, which describes the with of the distribution of log valve lengths. A useful trick for interpreting $\sigma$ is that about 95% of the probability of a Gaussian distribution lies between plus/minus two standard deviations from the mean. In this case, the estimate tells us that 95% of plausible log valve lengths lie within 1.68 log millimeters ($2\sigma$) of the mean log valve length.
+
+
+### Linear predictor 
+
+Our regression model describes a line with an intercept and a slope. As demonstrated above, this is true even in the case of a binary predictor -- even though our predictor can only take one of two values, the formula still describes a line.
+
+The function `brms::add_fitted_draws()` estimates the expected log valve length from the linear model part of our model. Remember that the linear model describes only the mean log valve length, and not the spread in log valve length. This function is a convenient way to help us visualize this part of our model.
+
+Here's an illustration of the linear relationship between taxonomic group and log valve size as described by the median estimates for each taxonomic group:
+```{r}
+# parameters of the line
+d_fitted <- d %>%
+  add_fitted_draws(model = m_2,
+                   n = 100) %>%        # 100 posterior estimates
+  ungroup() %>%
+  group_by(taxon) %>%                  # want to know taxon summary
+  dplyr::summarize(value = median(.value)) %>% 
+  mutate(taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda')) # make text clearer 
+
+d %>%
+  mutate(taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda')) %>% # make text clearer 
+  ggplot(aes(x = taxon, y = size_log)) +
+  geom_violin(fill = 'grey60', colour = NA) +
+  geom_jitter(height = 0, alpha = 0.5) +
+  geom_line(data = d_fitted,
+            mapping = aes(x = taxon, y = value, group = 1),
+            size = 1, colour = 'blue') +
+  labs(x = 'taxon', y = 'log valve length')
+```
+
+The above plot uses the median point estimates and includes none of our uncertainty about the relationship between the taxonomic groups and log valve length. There are a few ways we can demonstrate our uncertainty about the linear relationship.
+
+We can plot multiple lines at the same time:
+```{r}
+d_fitted <- d %>%
+  add_fitted_draws(model = m_2, 
+                   n = 100) %>%
+  ungroup() %>%
+  mutate(taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda')) # make text clearer 
+
+d %>%
+  mutate(taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda')) %>% # make text clearer 
+  ggplot(aes(x = taxon, y = size_log)) +
+  geom_violin(fill = 'grey60', colour = NA) +
+  geom_jitter(height = 0, alpha = 0.5) +
+  geom_line(data = d_fitted,
+            mapping = aes(x = taxon, y = .value, group = .draw),
+            size = 1, colour = 'blue', alpha = 0.1) +
+  labs(x = 'taxon', y = 'log valve length')
+```
+
+
+### Posterior prediction
+
+An aspect of Bayesian models we've yet to consider is the *posterior predictive distribution* $p(\tilde{y} | y)$.
+
+Prediction is when, given our model and parameter estimates, we want to estimate the outcome for some combination of covariates. The posterior predictive distribution is the distribution of outcomes defined by the plausible parameter values and data -- instead of a single prediction, we have a distribution. For example, we might want to predict the log valve length of some species given our model and parameter estimates. For each possible value of a parameter, there is an implied distribution of outcomes. If we compute the distribution of outcomes for each value, this gives us a posterior predictive distribution.
+
+Our full model describes log valve length as a Gaussian distribution with mean (as a linear model) and standard deviation. Our previous plots only considered the linear model aspect which describes the mean of the distribution, but there is still more information in our model: the estimated standard deviation $\sigma$. 
+
+The `brms::add_predicted_draws()` function does this exactly. For each "new" observation, we obtain a prediction of that observations log valve length, not just the *expected* value of log valve length. This function is similar to the `brms::add_fitted_draws()` function we used above, but instead of predicting from the linear model we are predicting from the entire distribution.
+
+Let's illustrate this by comparing our log valve length data to our posterior predictive distribution for that data:
+```{r}
+d_predicted <- d %>%
+  add_predicted_draws(model = m_2,
+                      n = 100) %>%
+  ungroup() %>%
+  mutate(taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda')) 
+
+d %>% 
+  mutate(taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda')) %>% 
+  ggplot(aes(x = taxon, y = size_log)) +
+  geom_violin(fill = 'grey60', colour = NA) +
+  geom_jitter(height = 0, alpha = 0.5) +
+  stat_lineribbon(data = d_predicted,
+                  mapping = aes(y = .prediction),
+                  alpha = 0.5) +
+  scale_fill_brewer()
+```
+
+
+#### Posterior predictive tests
+
+What if we want to test how well our model fits specific parts of our data, and not just compare the similarities of their distributions? For example, how well does our model estimate the mean log valve size of each taxon? 
+
+Here's the logic of posterior predictive tests: if data simulated from our posterior predictive distribution is able to reproduce a specific aspect of the original data, then the model might be doing something right. And if there are systematic failures in our model's ability to predict the data, then the model must be doing something wrong.
+
+Here's are a few example posterior predictive tests:
+```{r}
+# summarize the original data
+d_sum <- d %>%
+  group_by(taxon) %>%
+  dplyr::summarize(mean = mean(size_log),
+									 sd = sd(size_log),
+									 iqr = IQR(size_log)) %>%     # lots of options, none is best
+  gather(key, value, mean, sd, iqr) %>%
+  mutate(key = recode(key,
+                      mean = 'Mean',
+                      sd = 'Std Dev',
+                      iqr = 'Inter Quart Range'),
+         taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda'))
+
+d %>%
+  add_predicted_draws(model = m_2,
+                      n = 100) %>%     # calculate from n PPD draws
+  group_by(taxon, .draw) %>%
+  dplyr::summarize(mean = mean(.prediction),
+                   sd = sd(.prediction),
+                   iqr = IQR(.prediction)) %>%
+  ungroup() %>%
+  gather(key, value, mean, sd, iqr) %>%
+  mutate(key = recode(key,
+                      mean = 'Mean',
+                      sd = 'Std Dev',
+                      iqr = 'Inter Quart Range'),
+         taxon = recode(taxon,
+                        Biv = 'Bivalvia',
+                        Bra = 'Brachiopoda')) %>%
+  ggplot(aes(x = value)) +
+  geom_density(fill = 'grey80',
+               colour = NA) +
+  geom_vline(data = d_sum,
+             mapping = aes(xintercept = value),
+             size = 1.5,
+             colour = 'grey20') +
+  facet_grid(taxon ~ key, scales = 'free') +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = '<stat> log valve length')
+```
+
+Where does our model do well? Where does our model do poorly? Why? How could we modify our model to overcome these failures?
+
+Even though it should be obvious and mandatory to do go through with and report an extended posterior predictive checking process, it is relatively rare in macroevolutionary biology and paleobiology. Indeed, so rare that posterior predictive checking, if done creatively and well, can get you a paper: [Example 1](https://www.journals.uchicago.edu/doi/abs/10.1086/696265), [Example 2](https://www.journals.uchicago.edu/doi/abs/10.1086/682022), [Example 3](https://onlinelibrary.wiley.com/doi/abs/10.1111/j.1558-5646.2011.01574.x).
+
+
+# Summary
+
+To review, this lesson was an exercise in developing, communicating, and summarizing a Bayesian model -- specifically, a linear regression model. We've slowly developed a linear regression model by expanding a Gaussian distribution to include the effects of predictor information. We first developed our model using the symbolic representation of a statistical model, and we then implemented our model using functions from **brms**. Finally, we explored a number of ways of representing and visualizing posterior distributions; these included tables and figures. Finally, we briefly covered the difference between fitted predictions and the posterior predictive distribution.
