@@ -21,7 +21,7 @@ output:
 
 # Preface
 
-We're going to be using the [tidyverse](https://www.tidyverse.org) for data wrangling, and [brms](https://github.com/paul-buerkner/brms) for modeling. Discussion and activites are derived from 
+We're going to be using the [tidyverse](https://www.tidyverse.org) for data wrangling, and [brms](https://github.com/paul-buerkner/brms) for modeling. Discussion and activities are derived from 
 [**Statistical Rethinking** by Richard McElreath](https://xcelab.net/rm/statistical-rethinking/), 
 [**Bayesian Data Analysis 3** by Gelman et al.](http://www.stat.columbia.edu/~gelman/book/), and 
 [**Data Analysis Using Regression and Multilevel/Hierarchical Models** by Gelman and Hill](https://www.cambridge.org/core/books/data-analysis-using-regression-and-multilevelhierarchical-models/32A29531C7FD730C3A68951A17C9D983). 
@@ -98,7 +98,6 @@ This process is equivalent to
 <center>
   plausibility of $p$ after $D_{new}$ = (ways $p$ can produce $D_{new}$ X prior plausibility $p$) / sum of products
 </center>
-
 
 
 Each part of the calculations we've done correspond directly to quantities in applied probability theory.
@@ -236,6 +235,7 @@ Instead, our objective should be to test the model's adequacy for some *purpose*
     - The relative plausibility of different parameter values, conditional on the data
     - Sometimes written $p(\Theta | y)$.
 
+
 ## Bayes' Theorem 
 
 The logic defining the posterior distribution is called Bayes' Theorem. The theorem itself is an intuitive result from probability theory.
@@ -274,6 +274,7 @@ Our model has three parts: likelihood, parameters, and the prior. These values g
 Turns out that knowing all the rules doesn't necessarily help us with the calculations. For most interesting models we will ever considered, the necessary integrals in the Bayesian conditioning machinery have no closed form and can't be calculated no matter how talented you are. Instead, we need to rely on numerical techniques to approximate the mathematics defined in Bayes' theorem.
 
 All of the numerical techniques we use produce only samples from this distribution, not the distribution itself. Luckily, samples from the distribution are easier to work with than the actual distribution. This way we don't have to do integrals.
+
 
 ### Grid approximation
 
@@ -330,7 +331,7 @@ For many models, grid approximation or quadratic approximation just aren't good 
 
 Unlike grid approximation, where we computed the posterior distribution directly, MCMC techniques merely draw samples from the posterior. You end up with a collection of parameter values, where the frequencies of those values correspond to the posterior plausibilities.
 
-Let's do a quick example where we fit this model using **brms**. This package acts as an interface with [Stan probablistic programming language](<http://mc-stan.org/) which implements Hamiltonian Monte Carlo sampling, a fancy type of MCMC. The function `brm()` is the workhorse of the **brms** package, and builds and compiles a Stan model as defined in R. If you've used functions like `lm()` or `glm()`, some of the syntax should look familiar to you. 
+Let's do a quick example where we fit this model using **brms**. This package acts as an interface with [Stan probabilistic programming language](http://mc-stan.org/) which implements Hamiltonian Monte Carlo sampling, a fancy type of MCMC. The function `brm()` is the workhorse of the **brms** package, and builds and compiles a Stan model as defined in R. If you've used functions like `lm()` or `glm()`, some of the syntax should look familiar to you. 
 
 ```{r cache = T, message = F, results = 'hide'}
 # this can take a bit as the model compiles
@@ -369,7 +370,7 @@ From [Math with Bad Drawings](mathwithbaddrawings.com/2015/09/23/what-does-proba
 
 ## Working with samples
 
-In applied Bayesian analysis we rarely work directly with the integrals required by Bayes' theorm. Most numerical techniques we use, including MCMC methods, produce a set of samples -- individual draws from the joint posterior distribution. These samples transform a problem in calculus to a problem in data summary. It is easier to count samples within an interval then calculate an integral for that interval.
+In applied Bayesian analysis we rarely work directly with the integrals required by Bayes' theorem. Most numerical techniques we use, including MCMC methods, produce a set of samples -- individual draws from the joint posterior distribution. These samples transform a problem in calculus to a problem in data summary. It is easier to count samples within an interval then calculate an integral for that interval.
 
 This section also serves as a brief introduction to **tidybayes**, which we will continue using in our next lesson.
 
@@ -383,7 +384,7 @@ Once our model produces a posterior distribution, the model's work is done. It i
 - Which parameter value has highest posterior probability?
 
 
-### Intervals of defined boundaties
+### Intervals of defined boundaries
 
 What is the posterior probability that the proportion of water is less than 50%? Count the number of observations that are less than 0.5, then divide by the number of samples.
 ```{r}

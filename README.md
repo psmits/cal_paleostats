@@ -8,3 +8,10 @@ Material is heavily based on [**Statistical Rethinking** by Richard McElreath](h
 Additionally, my code is heavily cribbed from [Solomon Kurz's **brms** rewrite of **Statistical Rethinking**](https://bookdown.org/connect/#/apps/1850/access).
 
 At any point some sentences and examples are copied verbatim or nearly so; I make no claim to their ownership and they are only used here for example and learning purposes.
+
+These lessons require the following r packages:
+
+- tidyverse
+- brms
+- tidybayes
+- modelr

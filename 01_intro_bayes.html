@@ -158,7 +158,7 @@ $(document).ready(function () {
 </div>
 <div id="preface" class="section level1">
 <h1>Preface</h1>
-<p>We’re going to be using the <a href="https://www.tidyverse.org">tidyverse</a> for data wrangling, and <a href="https://github.com/paul-buerkner/brms">brms</a> for modeling. Discussion and activites are derived from <a href="https://xcelab.net/rm/statistical-rethinking/"><strong>Statistical Rethinking</strong> by Richard McElreath</a>, <a href="http://www.stat.columbia.edu/~gelman/book/"><strong>Bayesian Data Analysis 3</strong> by Gelman et al.</a>, and <a href="https://www.cambridge.org/core/books/data-analysis-using-regression-and-multilevelhierarchical-models/32A29531C7FD730C3A68951A17C9D983"><strong>Data Analysis Using Regression and Multilevel/Hierarchical Models</strong> by Gelman and Hill</a>.</p>
+<p>We’re going to be using the <a href="https://www.tidyverse.org">tidyverse</a> for data wrangling, and <a href="https://github.com/paul-buerkner/brms">brms</a> for modeling. Discussion and activities are derived from <a href="https://xcelab.net/rm/statistical-rethinking/"><strong>Statistical Rethinking</strong> by Richard McElreath</a>, <a href="http://www.stat.columbia.edu/~gelman/book/"><strong>Bayesian Data Analysis 3</strong> by Gelman et al.</a>, and <a href="https://www.cambridge.org/core/books/data-analysis-using-regression-and-multilevelhierarchical-models/32A29531C7FD730C3A68951A17C9D983"><strong>Data Analysis Using Regression and Multilevel/Hierarchical Models</strong> by Gelman and Hill</a>.</p>
 <p>I’m also using code examples from <a href="https://github.com/ASKurz/Statistical_Rethinking_with_brms_ggplot2_and_the_tidyverse">this rewriting</a> of <strong>Rethinking</strong>.</p>
 <pre class="r"><code>library(tidyverse)</code></pre>
 <pre><code>## ── Attaching packages ────────────────────────────────── tidyverse 1.2.1 ──</code></pre>
@@ -539,7 +539,7 @@ p(y) = E(p(y | \Theta)) = \int p(y | \Theta) p(\Theta) d\Theta
 <h3>Markov chain Monte Carlo</h3>
 <p>For many models, grid approximation or quadratic approximation just aren’t good enough. Grid approximation takes too long as your model gets bigger. Quadratic approximation chokes on complex models. Instead, we end up having to use a technique like Markov chain Monte Carlo (MCMC).</p>
 <p>Unlike grid approximation, where we computed the posterior distribution directly, MCMC techniques merely draw samples from the posterior. You end up with a collection of parameter values, where the frequencies of those values correspond to the posterior plausibilities.</p>
-<p>Let’s do a quick example where we fit this model using <strong>brms</strong>. This package acts as an interface with <a href="%3Chttp://mc-stan.org/">Stan probablistic programming language</a> which implements Hamiltonian Monte Carlo sampling, a fancy type of MCMC. The function <code>brm()</code> is the workhorse of the <strong>brms</strong> package, and builds and compiles a Stan model as defined in R. If you’ve used functions like <code>lm()</code> or <code>glm()</code>, some of the syntax should look familiar to you.</p>
+<p>Let’s do a quick example where we fit this model using <strong>brms</strong>. This package acts as an interface with <a href="http://mc-stan.org/">Stan probabilistic programming language</a> which implements Hamiltonian Monte Carlo sampling, a fancy type of MCMC. The function <code>brm()</code> is the workhorse of the <strong>brms</strong> package, and builds and compiles a Stan model as defined in R. If you’ve used functions like <code>lm()</code> or <code>glm()</code>, some of the syntax should look familiar to you.</p>
 <pre class="r"><code># this can take a bit as the model compiles
 globe_brms &lt;-
   brm(data = list(w = 24),             # generate data
@@ -590,7 +590,7 @@ globe_brms %&gt;%
 </div>
 <div id="working-with-samples" class="section level2">
 <h2>Working with samples</h2>
-<p>In applied Bayesian analysis we rarely work directly with the integrals required by Bayes’ theorm. Most numerical techniques we use, including MCMC methods, produce a set of samples – individual draws from the joint posterior distribution. These samples transform a problem in calculus to a problem in data summary. It is easier to count samples within an interval then calculate an integral for that interval.</p>
+<p>In applied Bayesian analysis we rarely work directly with the integrals required by Bayes’ theorem. Most numerical techniques we use, including MCMC methods, produce a set of samples – individual draws from the joint posterior distribution. These samples transform a problem in calculus to a problem in data summary. It is easier to count samples within an interval then calculate an integral for that interval.</p>
 <p>This section also serves as a brief introduction to <strong>tidybayes</strong>, which we will continue using in our next lesson.</p>
 <p>Once our model produces a posterior distribution, the model’s work is done. It is now <em>our</em> job to summarize and interpret that posterior. Common questions we might want to ask include:</p>
 <ul>
@@ -600,8 +600,8 @@ globe_brms %&gt;%
 <li>Which range of parameter values contains 90% of the posterior probability?</li>
 <li>Which parameter value has highest posterior probability?</li>
 </ul>
-<div id="intervals-of-defined-boundaties" class="section level3">
-<h3>Intervals of defined boundaties</h3>
+<div id="intervals-of-defined-boundaries" class="section level3">
+<h3>Intervals of defined boundaries</h3>
 <p>What is the posterior probability that the proportion of water is less than 50%? Count the number of observations that are less than 0.5, then divide by the number of samples.</p>
 <pre class="r"><code>globe_brms %&gt;%
     spread_draws(b_Intercept) %&gt;%
