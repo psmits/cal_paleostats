@@ -13,10 +13,10 @@ output:
 
 # Objectives
 
-- What defines a (Bayesian) model?
+- Learn what a (Bayesian) model actually means.
 - Introduce the logic behind Bayesian updating.
 - Dip our toes into numerical methods using **brms**.
-- Basics of summarizing a posterior distribution using **tidybayes**.
+- Cover the basics of summarizing a posterior distribution using **tidybayes**.
 
 
 # Preface
@@ -42,13 +42,13 @@ Bayesian inference is a fancy way of counting and comparing possibilities. As we
 
 ## Counting and plausibility
 
-We're going to use a simple example from **Statistical Rethinking** to start thinking about Bayesian analysis.
+We're going to use a simple example from **Statistical Rethinking** to start our thinking about Bayesian analysis.
 
-**Setup**: We've got a bag with four marbles. Each marble can be either blue (B) or white (W). We don't know the composition of the bag. Our goal is to figure out which of possible configuration is most plausible, given whatever evidence we learn about the bag. A sequence of three marbles have pulled from the bag, one at a time, then returned to the bag, and the bag is shaken before drawing another. We draw the sequence [B W B]. 
+**Setup**: We've got a bag with four marbles. Each marble can be either blue (B) or white (W). We don't know the composition of the bag. Our goal is to figure out which of possible configuration is most plausible, given whatever evidence we learn about the bag. A sequence of three marbles have pulled from the bag, one at a time, returned to the bag, and then the bag is shaken before drawing another. We draw the sequence [B W B]. 
 
-How many ways are their to produce this draw? Try with the possible bag compositions [B W W W]. 
+How many ways are there to produce this draw? Try first this possible bag composition: [B W W W]. 
 
-Here is the full table of ways to produce that draw given each possible bag composition.
+Here is the full table of ways to produce [B W B] given each possible bag composition.
 
 | conjecture | ways to produce [B W B] |
 |---|---|
@@ -59,7 +59,7 @@ Here is the full table of ways to produce that draw given each possible bag comp
 | [B B B B] | 4 x 0 x 4 = 0 |
 
 
-What happens when we draw another marble? We update the counts! How do we update the counts? We multiply the prior counts by the new count! The old counts are acting as our prior counts. Here is an example of drawing an additional [B].
+What happens when we draw another marble from the bag? We update the counts! How do we update the counts? We multiply the prior counts by the new count, with the old counts are acting as our prior counts. Here is an example how we would update our counts if we were to draw an additional [B].
 
 | conjecture  | ways to produce [B]  | previous counts  | new count  |
 |---|---|---|---|
@@ -76,14 +76,14 @@ Logically, what we've just done can be expressed as
   plausibility of [B W W W] after seeing [B W B] $\propto$ ways [B W W W] can produce [B W B] X prior plausibility of [B W W W].
 </center>
 
-But these are just counts and plausibilities; we want probabilities! First, let's define $p$ as proportion of blue marbles in the bag and $D_{new}$ as the data. We now have: 
+But these are just counts and plausibilities; we want probabilities! First, to make explaining ourselves simpler, let's define $p$ as the proportion of blue marbles in the bag and $D_{new}$ as our data. We now have: 
 
 <center>
   plausibility of $p$ after $D_{new}$ $\propto$ ways $p$ can produce $D_{new}$ X prior plausibility of $p$.
 </center>
 
 
-We the standardize the plausibility so that the sum of the plausibilities for all conjectures sums to 1. To standardize, we add up all the products, one for each $p$, then divide each product by the sum of the products.
+We want to standardize the plausibility so that the sum of the plausibilities for all conjectures sums to 1. To standardize, we add up all the products, one for each $p$, then divide each product by the sum of the products.
 
 | possible combinations | $p$ | ways to produce data | plausibility |
 |---|---|---|---|
@@ -100,7 +100,7 @@ This process is equivalent to
 </center>
 
 
-Each part of the calculations we've done correspond directly to quantities in applied probability theory.
+Each part of the calculations we've done so far correspond directly to quantities in applied probability theory.
 
 - The conjectured proportion of blue marbles, $p$, is usually called a *parameter*. 
 - The relative number of ways that $p$ can produce the data is usually called the *likelihood*.
@@ -123,13 +123,13 @@ d <- tibble(toss = c("w", "l", "w", "w", "w", "l", "w", "l", "w"))
         n_success = cumsum(toss == "w")))
 ```
 
-To get the logic machinery working, we need to make assumptions, and these assumptions constitute the model. An ideal design loop for designing a Bayesian model has three steps
+To get the logic machinery working, we need to make some assumptions. These assumptions constitute the our model. An ideal design loop for designing a Bayesian model has three steps
 
 1. **Data story** 
-    - Describe aspects of the underlying reality as well as the sampling process. 
-    - Then translated into a formal probability model.
-    - Framework for interpretation, but still a story.
-    - Helps with realizing additional questions that must be answered because hypotheses are frequently vague.
+    - Describe aspects of the underlying reality and the sampling process. 
+    - Translate this description into a formal probability model.
+    - Acts as a framework for interpretation, but still just a story.
+    - Helps with realizing additional questions that must be answered as hypotheses are frequently vague.
 2. **Updating**
     - Bayesian models begin with a set of plausibilities assigned to each possibility (*Prior*).
     - Update those plausibilities based on the data to give *posterior* plausibility.
@@ -146,22 +146,22 @@ How did the data come to be? Describe aspects of the underlying reality as well 
 
 ### Bayesian updating
 
-A Bayesian model begins with one set of plausibilities assigned to each possible result, the prior plausibilities. These values are then updated in light of data to produce posterior plausibilities. This process is *Bayesian updating*.
+A Bayesian model begins with one set of plausibilities assigned to each possible result: the prior plausibilities. These values are updated in light of data to produce our posterior plausibilities. This process is called *Bayesian updating*.
 
 ```{r}
 sequence_length <- 50                  # how many points to calculate prob for
 
 d %>% 
-  expand(n_trials, 
+  expand(n_trials, # for each value of ...
          p_water = seq(from = 0, to = 1, length.out = sequence_length)) %>% 
   left_join(d, by = "n_trials") %>%
   group_by(p_water) %>% 
   # lag is the *previous* value
   mutate(lagged_n_success = lag(n_success, k = 1), 
          lagged_n_trials  = lag(n_trials,  k = 1)) %>% 
+  ungroup() %>% 
   # if first time, flat prior. 
   # otherwise use previous posterior as new prior.
-  ungroup() %>% 
   mutate(prior = ifelse(n_trials == 1, 
                         .5,
                         dbinom(x = lagged_n_success, 
@@ -184,21 +184,20 @@ d %>%
 ```
 
 
-Side note on sample size. Bayesian estimates are valid and interpretable at any sample size. This is very much in contrast to the folk-wisdom around a minimum number of samples you'll hear in non-Bayesian contexts. In non-Bayesian contests, statistical inference is justified by behaviour at large samples sizes, called asymptotic behaviour. The reason Bayesian estimates are always valid and interpretable comes down to the prior. If the prior is bad, the resulting posterior could be misleading. Regardless, all estimates in either context are based on assumptions.
+**Side note on sample size:** Bayesian estimates are valid and interpretable at any sample size. This fact is very much in contrast to the folk-wisdom around a minimum number of samples needed that you'll hear in non-Bayesian contexts. In non-Bayesian contests, statistical inference is justified by behaviour at large samples sizes, called asymptotic behaviour. The reason Bayesian estimates are always valid and interpretable comes down to the prior. If the prior is bad, the resulting posterior could be misleading. Regardless, all estimates in either context are based on assumptions.
 
 
 ### Evaluate
 
 Our model is learning from a "small world" of data. If there are important differences between the model and reality, then there is no guarantee of "large world" performance.
 
-Certainty is no guarantee that the model is good. As data increases, our model will become increasingly sure of the proportion of water. This sureness happens even if the model is seriously misleading because our estimates are conditional on our model. What our model is saying is that, given that we're using a specific model, we can be sure that plausible values are within a narrow range.
+Certainty is no guarantee that the model is good. As data increases, our model will become increasingly sure of the proportion of water. This sureness happens even if the model is seriously misleading because our estimates are conditional on our model. What is happening is that, given a specific model, we can be sure that plausible values are within a narrow range.
 
+It is important that you supervise and critique your model, and not just assume it worked or is correct because your code did not return an error. Anything that is not included in our model might not affect our inference directly, but might affect it indirectly because of that unmodeled dependence. For example, we currently are assuming that the order the data was collected in doesn't matter (*exchangeable*), but what if the order of the observations actually did matter? Check the model's inferences in light of aspects of the data that you know but the model doesn't know about. This part of data analysis is an inherently creative endeavor that is up to you (the analyst) and your scientific community. Robots can't do this step for you.
 
-You've got to supervise and critique your model, and not just assume it worked or is correct. Anything in not included in our model might not affect our inference directly, but it might affect it indirectly because of that unmodeled dependence. For example, we currently are assuming that the order the data was collected in doesn't matter (exchangeable), but what if the order of the observations actually did matter? Check the model's inferences in light of aspects of the data that you know but the model doesn't know about. This part of data analysis is an inherently creative endeavor that is up to you (the analyst) and your scientific community. Robots can't do this step for you.
+The goal when evaluating your model is not to test the truth of the model's assumptions. Our model's assumptions can never be exactly right and are not the true data generating process. Failure to prove that our model false is a failure of our imagination, not a success of our model. Additionally, a model doesn't have to be true in order to produce precise and useful inference. Models are information processing machines, and there are parts of information that cannot be easily represented by framing our problem in terms of the truth of our assumptions.
 
-The goal when evaluating your model is not the test the truth of the model's assumptions. Our model's assumptions are never exactly right and are not the true data generating process. Failure to prove the model false is a failure of our imagination, not a success of the model. Additionally, a model doesn't have to be true in order to produce precise and useful inferences. Models are information process machines, and there are parts of information that cannot be easily represented by framing our problem in terms of the truth of assumptions.
-
-Instead, our objective should be to test the model's adequacy for some *purpose*. What are we trying to learn? This means asking and answering more questions than those originally used to construct our model. Think about what you know as a domain expert and compare it to your model; if there is a conflict you should update your model (likelihood and/or prior) to better reflect your domain knowledge. It is hard to give general advice on model evaluation is that there are lots of different contexts for evaluating the adequacy of a model -- prediction, comprehension, measurement, persuasion. These are inherently *scientific questions*, not statistical questions. As I said earlier, robot's can't do this step for you.
+Instead, our objective should be to test the model's adequacy for some *purpose*. What are we trying to learn? This means asking and answering more questions than those originally used to construct our model. Think about what you know as a domain expert and compare it to your model; if there is a conflict you should update your model (likelihood and/or prior) to better reflect your domain knowledge. It is hard to give general advice on model evaluation as there are lots of different contexts for evaluating the adequacy of a model -- prediction, comprehension, measurement, and persuasion. These are inherently *scientific questions*, not statistical questions. As I said earlier, robot's can't do this step for you.
 
 
 # Terms and theory
@@ -228,11 +227,11 @@ Instead, our objective should be to test the model's adequacy for some *purpose*
         - Constrain parameters to reasonable ranges.
         - Express any knowledge we have about that parameter before any data is observed.
     - An engineering assumption; helps us learn from our data.
-    - Regularizing or weakly informative priors are conservative in that they tend to guard against inferring strong associations between variables --> Advanced topics
+    - Regularizing or weakly informative priors are conservative in that they tend to guard against inferring strong associations between variables --> advanced topics.
     - Sometimes written $p(\Theta)$.
 - **Posterior**
-    - Logical consequence of likelihood, which parameters to estimate, and priors for each parameter.
-    - The relative plausibility of different parameter values, conditional on the data
+    - Logical consequence of likelihood, the set of parameters to estimate, and priors for each parameter.
+    - The relative plausibility of different parameter values, conditional on the data.
     - Sometimes written $p(\Theta | y)$.
 
 
@@ -264,31 +263,31 @@ $$
 p(y) = E(p(y | \Theta)) = \int p(y | \Theta) p(\Theta) d\Theta
 $$
 
-$E(\cdot)$ means to take the expectation, a (weighted) average. Notice also that $p(y)$ is a type of marginal probability distribution; the process of integrating out a term ($\Theta$) is called marginalization -- we are averaging $y$ over all values of $\Theta$. An integral is like an average over a continuous distribution of values.
+$E(\cdot)$ means to take the expectation, a (weighted) average. Notice also that $p(y)$ is a type of marginal probability distribution; the process of integrating out a term ($\Theta$) is called marginalization -- we are averaging $y$ over all values of $\Theta$. Remember also that an integral is like an average over a continuous distribution of values.
 
 
 ## But how does it *work*?
 
-Our model has three parts: likelihood, parameters, and the prior. These values get put into an "motor" that gives a posterior distribution -- the motor goes through the process of conditioning the prior on the data.
+Our model has three parts: likelihood, parameters, and the prior. These values get put into a "motor" that gives us a posterior distribution. The motor goes through the process of conditioning the prior on the data.
 
-Turns out that knowing all the rules doesn't necessarily help us with the calculations. For most interesting models we will ever considered, the necessary integrals in the Bayesian conditioning machinery have no closed form and can't be calculated no matter how talented you are. Instead, we need to rely on numerical techniques to approximate the mathematics defined in Bayes' theorem.
+Turns out that knowing all the rules doesn't necessarily help us with the calculations. For most interesting models we will ever consider, the necessary integrals in the Bayesian conditioning machinery have no closed form and can't be calculated no matter how talented you are. Each new parameter effectively adds a new level to the integral used to calculate $p(y)$. Instead, we need to rely on numerical techniques to approximate the mathematics defined in Bayes' theorem.
 
-All of the numerical techniques we use produce only samples from this distribution, not the distribution itself. Luckily, samples from the distribution are easier to work with than the actual distribution. This way we don't have to do integrals.
+All of the numerical techniques we use produce only *samples* from the posterior distribution, not the distribution itself. Luckily, samples from the distribution are easier to work with than the actual distribution -- this way we don't have to do integrals.
 
 
 ### Grid approximation
 
-One of the simplest conditioning techniques is grid approximation. While most parameters are continuous, we can get a decent approximation of them by consider only a finite grid of parameter values. For any particular value $p'$, compute the posterior probability by multiplying the prior probability of $p'$ by the likelihood of $p'$.
+One of the simplest conditioning techniques is grid approximation. While most parameters are continuous, we can get a decent approximation of them by considering only a finite grid of parameter values. For any particular value $p'$, compute the posterior probability by multiplying the prior probability of $p'$ by the likelihood of $p'$.
 
-Grid approximation is a teaching tool that forces you to really understand the nature of Bayesian updating. You will probably never use it in your actual work. As a method, grid approximation scales very poorly as the number of parameters increases.
+Grid approximation is a teaching tool that forces you to really understand the nature of Bayesian updating. You will probably never use it in your actual work. Grid approximation scales very poorly as the number of parameters increases.
 
 How to do grid approximation: 
 
 1. Define a grid (range of values to look at). 
-2. Compare the value of the prior at each parameter value of the grid.
+2. Calculate the value of the prior at each parameter value of the grid.
 3. Compute the likelihood at each parameter value.
 4. Compute the unstandardized posterior at each parameter, but multiplying the prior by the likelihood.
-5. Standardize the posterior by dividing each value by the sum of all values.
+5. Standardize the posterior by dividing each value by the sum of all unstandardized values.
 
 The number of points you evaluate on the grid determines the precision of your estimates. More points, finer grained posterior. 
 
@@ -343,7 +342,7 @@ globe_brms <-
       control = list(adapt_delta = 0.95), # control sampling behavior --> advanced topic
       refresh = 0,                     # silences a bunch of text
       iter = 2000,                     # how many draws from posterior? (default)
-      warmup = 1000)                   # how many draws till we start recording (default)
+      warmup = 1000)                   # how many draws till we start recording (default = 1/2 iter)
 ```
 ```{r}
 print(globe_brms)
@@ -370,10 +369,9 @@ From [Math with Bad Drawings](mathwithbaddrawings.com/2015/09/23/what-does-proba
 
 ## Working with samples
 
-In applied Bayesian analysis we rarely work directly with the integrals required by Bayes' theorem. Most numerical techniques we use, including MCMC methods, produce a set of samples -- individual draws from the joint posterior distribution. These samples transform a problem in calculus to a problem in data summary. It is easier to count samples within an interval then calculate an integral for that interval.
+In applied Bayesian analysis we rarely work directly with the integrals required by Bayes' theorem. Most numerical techniques we use, including MCMC methods, produce a set of samples that are individual draws from the posterior distribution. These samples transform a problem in calculus to a problem in data summary. It is easier to count the number of samples within an interval then calculate the integral for that interval.
 
-This section also serves as a brief introduction to **tidybayes**, which we will continue using in our next lesson.
-
+This section also serves as a brief introduction to summarizing posterior samples using **tidybayes**, which we will continue using in our next lesson.
 
 Once our model produces a posterior distribution, the model's work is done. It is now *our* job to summarize and interpret that posterior. Common questions we might want to ask include:
 
@@ -381,7 +379,7 @@ Once our model produces a posterior distribution, the model's work is done. It i
 - How much posterior probability lies between two parameter values?
 - Which parameter value marks the lower 5% of the posterior probability?
 - Which range of parameter values contains 90% of the posterior probability?
-- Which parameter value has highest posterior probability?
+- Which parameter value has the highest posterior probability?
 
 
 ### Intervals of defined boundaries
@@ -417,7 +415,7 @@ globe_brms %>%
   dplyr::summarize(q80 = quantile(b_Intercept, 0.8))
 ```
 
-What about the middle 80% interval?
+What about the middle 80% interval? There are lots of ways to get this information, so here are two examples.
 ```{r}
 # one way
 (qu <- globe_brms %>%
@@ -433,7 +431,7 @@ globe_brms %>%
   quantile(prob = c(0.1, 0.9))         
 ```
 
-We can also plot this
+We can also plot this interval on the distribution.
 ```{r}
 # plot the distribution
 p1 <- globe_brms %>%
@@ -444,7 +442,7 @@ p1 <- globe_brms %>%
   scale_x_continuous(limits = c(0, 1))
 
 # get back the density line calculation
-p1_df <- ggplot_build(p1)$data[[1]]
+p1_df <- ggplot_build(p1)$data[[1]]    # this is messy
 
 # shade area under the distribution
 p1 + geom_area(data = subset(p1_df, x > qu$q10 & x < qu$q90),
@@ -476,16 +474,16 @@ globe_brms %>%
  
 Why are the PI and HPDI not equal?
 
-If the choice of interval makes a big difference in your summary, then you probably shouldn't be using intervals to summarize the posterior. The entire distribution is our actual estimate, the summaries are just there to help digest. Do not only work with simplified versions of our posterior estimates.
+If the choice of interval makes a big difference in your summary, then you probably shouldn't be using intervals to summarize the posterior! The entire distribution of samples is our actual estimate, these summaries are just there to help digest this wealth of information. Do not only work with simplified versions of our posterior estimates!
 
 
 ### Point estimates
 
-Sometimes we only want a single point from the distribution. But given an entire posterior distribution, what value should we report? Mechanically, this task is simple -- pick a summary and go. Conceptually, this task is actually quite complex. The Bayesian parameter estimate is precisely the entire posterior distribution, and not just a single number. The posterior is a function that maps each unique parameter value onto a plausibility value. In most cases, it is unnecessary to choose a single point estimate. It is always better to report *more* than necessary about the posterior distribution than *less* than necessary. 
+Sometimes we only want a single point from the distribution. Given an entire posterior distribution, what value should we report? Mechanically, this task is simple -- pick a summary (e.g. mean) and go. Conceptually, however, this task is actually quite complex. The Bayesian parameter estimate is the entire posterior distribution, and not just a single number. In most cases, it is unnecessary to choose a single point estimate. It is always better to report *more* than necessary about the posterior distribution than not enough.
 
-The three most common point estimates are the mean, median, and mode -- you're probably already familiar with all three of them. A principled way of choosing among these three estimates is considering as products of different *loss functions*. Loss functions are an advanced topic we will not cover today but I encourage you to read up on; here's a good [blog entry by John Myles White](http://www.johnmyleswhite.com/notebook/2013/03/22/modes-medians-and-means-an-unifying-perspective/).
+The three most common point estimates are the mean, median, and mode -- you're probably already familiar with all three of them. A principled way of choosing among these three estimates is considering as products of different *loss functions*. Loss functions are an advanced topic we will not cover today but I encourage you to read up on; here's a good [blog entry by John Myles White](http://www.johnmyleswhite.com/notebook/2013/03/22/modes-medians-and-means-an-unifying-perspective/) on the subject.
 
-The mode represents the parameter value with the highest posterior probability, or the *maximum a posteriori* estimate (MAP). In frequentist contexts, the maximum likelihood estimate is the equivalent to mode. Calculating the mode of a distribution is an optimization problem and isn't necessarily straight forward.
+The mode represents the parameter value with the highest posterior probability, or the *maximum a posteriori* estimate (MAP). In frequentist contexts, the maximum likelihood estimate is the equivalent to mode of the likelihood function. Calculating the mode of a distribution is an optimization problem and isn't always easy. Luckily, **tidybayes** has a function which gets us a mode (and other information) from the posterior samples.
 
 Here is a code snippet that gives a mode and a middle 95% percentile interval:
 ```{r}
@@ -495,7 +493,7 @@ globe_brms %>%
   mode_qi()
 ```
 
-But we could also report a mean or median. Here are some ways to do get these estimates along with some kind of interval:
+We could also report a mean or median. Here are some ways to do get these estimates along with some kind of interval:
 ```{r}
 # mean with 95% PI
 globe_brms %>%
@@ -527,10 +525,10 @@ Usually it is better to communicate as much about the posterior distribution as 
 
 # Summary
 
-So far we've introduced the conceptual mechanism drive Bayesian data analysis. This framework emphasizes the posterior probability distribution, which is the logical compromise between our previous information and what new information we've gained (given our model). Posterior probabilities state the relative plausibility of each conjectured cause of the data could have produced the data, given our model. These plausibilities are updated in light of observations, a process known as Bayesian updating.
+So far we've introduced the conceptual mechanism driving Bayesian data analysis. This framework emphasizes the posterior probability distribution, which is the logical compromise between our previous information and whatever new information we've gained (given our model). Posterior probabilities state the relative plausibility of each conjectured possibility that could have produced the data, given our model. These plausibilities are updated in light of observations, a process known as Bayesian updating.
 
 We've defined the components of a Bayesian model: a likelihood, one or more parameters, and a prior for every parameter. The likelihood defines the plausibility of the data, given a fixed value for the parameters. The prior provides the initial plausibility of each parameter value, before accounting for the data. These components, when processed through Bayes' Theorem, yield the posterior distribution.
 
-Many of the actual calculations necessary to yield the posterior distribution have no closed-form solution and must instead be approximated using numerical methods. We covered grid approximation as a gentle introduction to sampling. We also fit our basic model using **brms**.
+Many of the actual calculations necessary to yield the posterior distribution have no closed-form solution and must instead be approximated using numerical methods. We covered grid approximation as a gentle introduction to sampling. We also fit our basic model using **brms**, which uses Stan's HMC engine to condition our estimates on the data.
 
 Given the posterior samples from our model fit, we also covered basic methods for summarizing a posterior distribution such as intervals and point estimates.

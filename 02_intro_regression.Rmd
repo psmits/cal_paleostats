@@ -1,9 +1,9 @@
 ---
 title: "Linear Regression"
 output: 
-  html_document: 
-    toc: true 
-    toc_depth: 2
+html_document: 
+toc: true 
+toc_depth: 2
 ---
 
 
@@ -51,8 +51,8 @@ Here are the choices encoded in a model description:
 Here's the globe tossing model from last week
 $$
 \begin{align} 
-  w &\sim \text{Binomial}(n, p) \\
-  p &\sim \text{Uniform}(0, 1). \\
+w &\sim \text{Binomial}(n, p) \\
+p &\sim \text{Uniform}(0, 1). \\
 \end{align}
 $$
 Identify the parts of this model description. (Hint: there are no predictors or covariates.)
@@ -75,9 +75,9 @@ r <- read_tsv('./payne_bodysize/Occurrence_PaleoDB.txt') # grabbing from subdire
 # modify raw data for use
 # genus can occur 1+ times
 (d <- r %>%
-   group_by(taxon_name, taxon) %>%
-   dplyr::summarize(size = mean(size)) %>% # is this always a good idea?
-   mutate(size_log = log(size)) %>%    # log transform
+ group_by(taxon_name, taxon) %>%
+ dplyr::summarize(size = mean(size)) %>% # is this always a good idea?
+ mutate(size_log = log(size)) %>%    # log transform
    ungroup())
 
 # look at the data
@@ -98,9 +98,9 @@ What do the different parts of this definition mean?
 To complete this model we need to define the priors for the parameters $\mu$ and $\sigma$. We need a joint prior $Pr(\mu, \sigma)$, but most of the time we'll just define independent priors for each parameter -- this is equivalent to saying $Pr(\mu, \sigma) = Pr(\mu)Pr(\sigma)$. Here's a more complete look at the Gaussian model of log valve length:
 $$
 \begin{align}
-  s_{i} &\sim \text{Normal}(\mu, \sigma) \\
-  \mu &\sim \text{Normal}(3, 10) \\
-  \sigma &\sim \text{Uniform}(0, 20) \\
+s_{i} &\sim \text{Normal}(\mu, \sigma) \\
+\mu &\sim \text{Normal}(3, 10) \\
+\sigma &\sim \text{Uniform}(0, 20) \\
 \end{align}
 $$
 What do each of these three lines mean? 
@@ -145,15 +145,15 @@ Now that we've completely defined out model (likelihood, data to condition on, p
 We're going to use the **brms** package to fit our model. This package was briefly introduced at the end of last lesson, and we're going to get more experience with it today. After we fit the model, we'll use functions from **tidybayes** that will help us extract and visualize our posterior distribution.
 ```{r cache = T, message = F, results = 'hide'}
 m_1 <- brm(data = d, 
-          family = gaussian(), 
-          formula = bf(size_log ~ 1), 
-          prior = c(prior(normal(3, 10), class = Intercept), 
-                    prior(uniform(0, 20), class = sigma)),
-          iter = 2000,                 # default
-          warmup = 1000,               # 1/2 iter
-          chains = 4,                  # each chain is a set of samples
-          cores = 4,                   # parallel processing; this might not work on your computer
-          refresh = 0)                 # less text output
+           family = gaussian(), 
+           formula = bf(size_log ~ 1), 
+           prior = c(prior(normal(3, 10), class = Intercept), 
+                     prior(uniform(0, 20), class = sigma)),
+           iter = 2000,                 # default
+           warmup = 1000,               # 1/2 iter
+           chains = 4,                  # each chain is a set of samples
+           cores = 4,                   # parallel processing; this might not work on your computer
+           refresh = 0)                 # less text output
 ```
 ```{r}
 # what does the brm object look like?
@@ -182,18 +182,18 @@ m_1 %>%
   add_predicted_draws(newdata = d,     # original data gives to simulate from
                       model = .,       # the model we want the PPD from
                       n = 100) %>%     # how many draws from PPD per observation
-  ggplot(aes(x = .prediction, group = .draw)) +
-  geom_line(stat = 'density', 
-            alpha = 0.1, 
-            colour = 'blue') +
-  geom_line(stat = 'density', 
-            data = d,                  # compare to original data distribution
-            mapping = aes(x = size_log, 
-                          group = NULL), 
-            colour = 'black',
-            size = 1.5) +
-  scale_y_continuous(NULL, breaks = NULL) +
-  labs(x = 'log valve length')
+ggplot(aes(x = .prediction, group = .draw)) +
+geom_line(stat = 'density', 
+          alpha = 0.1, 
+          colour = 'blue') +
+geom_line(stat = 'density', 
+          data = d,                  # compare to original data distribution
+          mapping = aes(x = size_log, 
+                        group = NULL), 
+          colour = 'black',
+          size = 1.5) +
+scale_y_continuous(NULL, breaks = NULL) +
+labs(x = 'log valve length')
 ```
 
 
@@ -218,9 +218,9 @@ To build a linear model the strategy is to make the parameter for the mean of th
 Currently, our model looks like this:
 $$
 \begin{align}
-  s_{i} &\sim \text{Normal}(\mu, \sigma) \\
-  \mu &\sim \text{Normal}(3, 10) \\
-  \sigma &\sim \text{Uniform}(0, 20) \\
+s_{i} &\sim \text{Normal}(\mu, \sigma) \\
+\mu &\sim \text{Normal}(3, 10) \\
+\sigma &\sim \text{Uniform}(0, 20) \\
 \end{align}
 $$
 
@@ -231,11 +231,11 @@ First, let the mathematical name of the column "taxon" from the tibble `d` be ca
 To get taxonomic group into the model, we need to define $\mu$ as a function of the values in $x$. Here's how we could do this:
 $$
 \begin{align}
-  s_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
-  \mu_{i} &= \alpha + \beta x_{i}\\
-  \alpha &\sim \text{Normal}(3, 10) \\
-  \beta &\sim \text{Normal}(0, 10) \\
-  \sigma &\sim \text{Uniform}(0, 20) \\
+s_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
+\mu_{i} &= \alpha + \beta x_{i}\\
+\alpha &\sim \text{Normal}(3, 10) \\
+\beta &\sim \text{Normal}(0, 10) \\
+\sigma &\sim \text{Uniform}(0, 20) \\
 \end{align}
 $$
 What do each of the lines in the model represent? What has changed and why?
@@ -289,8 +289,8 @@ r %>%
   model_matrix(~ sub) %>%              # from modelr
   distinct()
 
-r %>%
-  model_matrix(~ sub)
+  r %>%
+    model_matrix(~ sub)
 ```
 
 One of the values of the column is designated to be the intercept. In R, the default intercept is the first value of the vector, alphabetically.
@@ -338,9 +338,9 @@ d_fitted <- d %>%
   ungroup() %>%
   group_by(taxon) %>%                  # want to know taxon summary
   dplyr::summarize(value = median(.value)) %>% 
-  mutate(taxon = recode(taxon,
-                        Biv = 'Bivalvia',
-                        Bra = 'Brachiopoda')) # make text clearer 
+    mutate(taxon = recode(taxon,
+                          Biv = 'Bivalvia',
+                          Bra = 'Brachiopoda')) # make text clearer 
 
 d %>%
   mutate(taxon = recode(taxon,
@@ -362,10 +362,10 @@ We can plot multiple lines at the same time:
 d_fitted <- d %>%
   add_fitted_draws(model = m_2, 
                    n = 100) %>%
-  ungroup() %>%
-  mutate(taxon = recode(taxon,
-                        Biv = 'Bivalvia',
-                        Bra = 'Brachiopoda')) # make text clearer 
+ungroup() %>%
+mutate(taxon = recode(taxon,
+                      Biv = 'Bivalvia',
+                      Bra = 'Brachiopoda')) # make text clearer 
 
 d %>%
   mutate(taxon = recode(taxon,
@@ -396,10 +396,10 @@ Let's illustrate this by comparing our log valve length data to our posterior pr
 d_predicted <- d %>%
   add_predicted_draws(model = m_2,
                       n = 100) %>%
-  ungroup() %>%
-  mutate(taxon = recode(taxon,
-                        Biv = 'Bivalvia',
-                        Bra = 'Brachiopoda')) 
+ungroup() %>%
+mutate(taxon = recode(taxon,
+                      Biv = 'Bivalvia',
+                      Bra = 'Brachiopoda')) 
 
 d %>% 
   mutate(taxon = recode(taxon,
@@ -427,16 +427,16 @@ Here's are a few example posterior predictive tests:
 d_sum <- d %>%
   group_by(taxon) %>%
   dplyr::summarize(mean = mean(size_log),
-									 sd = sd(size_log),
-									 iqr = IQR(size_log)) %>%     # lots of options, none is best
+                   sd = sd(size_log),
+                   iqr = IQR(size_log)) %>% # lots of options, none is best
   gather(key, value, mean, sd, iqr) %>%
   mutate(key = recode(key,
                       mean = 'Mean',
                       sd = 'Std Dev',
                       iqr = 'Inter Quart Range'),
          taxon = recode(taxon,
-                        Biv = 'Bivalvia',
-                        Bra = 'Brachiopoda'))
+                       Biv = 'Bivalvia',
+                       Bra = 'Brachiopoda'))
 
 d %>%
   add_predicted_draws(model = m_2,
