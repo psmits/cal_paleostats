@@ -29,22 +29,20 @@ theme_set(theme_bw())
 
 Linear regression refers to a large family of statistical models which attempt to learn about the mean and variance of some measurement, using an additive combination of other measures. Linear regression is a descriptive model that corresponds to many different processes.
 
-Normally regression is presented as a way of representing the relationship between variables. I believe this description obscures the interpretation of regression results. Instead, we're going to think of linear regression as a method that summarizes how the average values of a numerical outcome variable vary over subpopulations defined by linear functions of predictors. 
+Normally regression is presented as a way of representing the relationship between two or more variables. I believe this description obscures the interpretation and meaning of regression results. Instead, we're going to think of linear regression as a method that summarizes how the *average values* of a numerical outcome vary as a linear functions of predictors. 
 
-Regression can be used to predict an outcome given a linear function of those predictors, and regression coefficients can be thought of as comparisons across predicted values or as comparisons among averages in the data. A regression coefficient describe the expected change in the response per unit change in its predictor.
+Regression can be used to predict an outcome given a linear function of those predictors, and regression coefficients can be thought of as comparisons across predicted values or as comparisons among averages in the data. A regression coefficient describes the expected change in the response per unit change in its predictor. Linear regression uses a Gaussian/Normal distribution to describe the distribution of our measurement of interest. Like any model, linear regression is not universally applicable. But linear regression is pretty foundational in statistics because once you can build and interpret a linear regression model, it is easy to move on to other types of regression for when things aren't Normal. 
 
-We're also going to be discussing linear regression from a Bayesian perspective. Linear regression uses a Gaussian/Normal distribution to describe our uncertainty about a measurement of interest. Like any model, this is not universally applicable. But linear regression is pretty foundational because once you can build and interpret linear regression, it is easy to move on to other types of regression for when things aren't Normal.
-
-Models of normally distributed data are very common: t-test, single regression, multiple regression, ANOVA, ANCOVA, MANOVA, MANCOVA, etc. All of these models are functionally equivalent. Learning and understanding each of these special cases is a lot of unnecessary work. We're going to learn a single means of communicating a model and all of its assumptions.
+Models of normally distributed data are very common: t-test, single regression, multiple regression, ANOVA, ANCOVA, MANOVA, MANCOVA, etc. All of these models are functionally equivalent. Learning and understanding each of these special cases is a lot of unnecessary work; instead, we're going to focus on a general modeling strategy that subsumes all of these special cases. Additionally, we're going to cover a single means of communicating a model that encodes all of our assumptions and presents them clearly.
 
 
 ## Talking about models
 
 Here are the choices encoded in a model description:
 
-1. An outcome variable or variables that we hope to predict or understand ($y$).
-2. Likelihood distribution that defines the plausibility of individual observations.
-3. Predictors or covariates; a set of other measurements that we hope to use to predict or understand the outcome ($X$).
+1. Outcome variable or variables that we hope to predict or understand ($y$).
+2. Likelihood distribution that defines the plausibility of the individual observations.
+3. Predictors or covariates -- a set of other measurements that we hope to use to predict or understand the outcome ($X$).
 4. Relation between the shape of the likelihood distribution (e.g. location and scale) to the predictor variables. The nature of this relation forces us to define all the parameters of the model.
 5. Priors for all of the parameters in the model.
 
@@ -55,20 +53,20 @@ w &\sim \text{Binomial}(n, p) \\
 p &\sim \text{Uniform}(0, 1). \\
 \end{align}
 $$
-Identify the parts of this model description. (Hint: there are no predictors or covariates.)
-
-It is ok if you do not immediately understand this notation; that's a normal part of learning. One of our goals is to learn this notation so that we can specify and communicate our model clearly so that other people can understand what we're doing. This language is general, and can be used to describe all model types.
+Identify the parts of this model description. 
 
 The $\sim$ symbol indicates a stochastic relationship. A stochastic relationship means that the variable or parameter is mapped onto a distribution of values. It is stochastic because no single instance of the variable on the left is known with certainty. This relationship is probabilistic as some values are more plausible than others, though there are many plausible values under any model.
+
+It is ok if you do not immediately understand this notation; that's a normal part of learning. This notation allows us to specify and communicate our model clearly so that other people can understand what we're doing. This language is general, and can be used to describe all model types. By continuing to use this notation, we will build familiarity with this syntax. 
 
 
 ## Growing a regression model
 
-We're going to use a real dataset and slowly build up a regression model. We will begin with a proto-regression model and then add predictors.
-
-We want a measurement variable to model as a Gaussian distribution. The Gaussian distribution has two parameters describing the shape of the distribution -- mean $\mu$ and standard deviation $\sigma$. The way Bayesian updating works means we want to consider all possible combinations of $\mu$ and $\sigma$ and rank them by posterior plausibility. The posterior is in effect a distribution of plausible Gaussian distributions.
+We're going to use a real dataset of invertebrate valve sizes and slowly build up a regression model to describe differences between taxonomic gorups. We will begin with a proto-regression model and then add predictors.
 
 The dataset we're going to have fun with as part of today's activities is the Bivalve and Brachiopod body size data from [Payne et al. 2014 ProcB](http://rspb.royalsocietypublishing.org/content/281/1783/20133122.long). Their data includes location, age, type, and valve length. Load the "occurrence" tab-delimited file and start exploring the distribution of body sizes. 
+
+
 ```{r}
 r <- read_tsv('./payne_bodysize/Occurrence_PaleoDB.txt') # grabbing from subdirectory
 
@@ -89,11 +87,21 @@ d %>%
   labs(x = 'valve length')
 ```
 
+We want a measurement variable to model as a Gaussian distribution. The Gaussian distribution has two parameters describing the shape of the distribution -- mean $\mu$ and standard deviation $\sigma$. Here's a quick picture of a Gaussian distribution, play around with the mean and standard deviation parameters.
+```{r}
+ggplot(data = tibble(x = seq(from = -25, to = 25, by = 0.1)),
+       aes(x = x, y = dnorm(x, mean = 0, sd = 1))) +
+  geom_line() +
+  scale_y_continuous(NULL, breaks = NULL)
+```
+
+The way Bayesian updating works means we want to consider all possible combinations of $\mu$ and $\sigma$ and rank them by posterior plausibility. The posterior is in effect a distribution of plausible Gaussian distributions.
+
 To define the log valve length as Gaussian distributed with mean $\mu$ and standard deviation $\sigma$, we write
 $$
 s_{i} \sim \text{Normal}(\mu, \sigma)
 $$
-What do the different parts of this definition mean?
+What do the different parts of this statement mean?
 
 To complete this model we need to define the priors for the parameters $\mu$ and $\sigma$. We need a joint prior $Pr(\mu, \sigma)$, but most of the time we'll just define independent priors for each parameter -- this is equivalent to saying $Pr(\mu, \sigma) = Pr(\mu)Pr(\sigma)$. Here's a more complete look at the Gaussian model of log valve length:
 $$
@@ -182,26 +190,28 @@ m_1 %>%
   add_predicted_draws(newdata = d,     # original data gives to simulate from
                       model = .,       # the model we want the PPD from
                       n = 100) %>%     # how many draws from PPD per observation
-ggplot(aes(x = .prediction, group = .draw)) +
-geom_line(stat = 'density', 
-          alpha = 0.1, 
-          colour = 'blue') +
-geom_line(stat = 'density', 
-          data = d,                  # compare to original data distribution
-          mapping = aes(x = size_log, 
-                        group = NULL), 
-          colour = 'black',
-          size = 1.5) +
-scale_y_continuous(NULL, breaks = NULL) +
-labs(x = 'log valve length')
+  ggplot(aes(x = .prediction, group = .draw)) +
+  geom_line(stat = 'density', 
+            alpha = 0.1, 
+            colour = 'blue') +
+  geom_line(stat = 'density', 
+            data = d,                  # compare to original data distribution
+            mapping = aes(x = size_log, 
+                          group = NULL), 
+            colour = 'black',
+            size = 1.5) +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = 'log valve length')
 ```
+
+We will be discussing the posterior predictive distribution further later in the lesson. For now, think of this as the distribution of outcomes implied by our model -- the distribution of plausible distributions.
 
 
 ## Adding a predictor to the mix
 
-Currently, our model doesn't really resemble what we think of as "regression." Typically, we want to understand how the outcome is related to some predictor variable. 
+Currently, our model doesn't really resemble what we think of as "regression." Typically, we want to understand how the mean of our outcome variable is related to one or more predictor variables. 
 
-Let's ask a basic questions: do Bivalves and Brachiopods differ in valve length? Start by looking at the data.
+Let's start with a basic analysis questions: do Bivalves and Brachiopods differ in valve length? Start by looking at the data.
 ```{r}
 d %>%
   mutate(taxon = recode(taxon,
@@ -213,7 +223,7 @@ d %>%
   labs(x = 'taxon', y = 'log valve length')
 ```
 
-To build a linear model the strategy is to make the parameter for the mean of the Gaussian distribution, $\mu$, in a linear function of the predictor variable and other, new parameters we invent. A linear model means that we assume that the predictors have a perfectly constant and additive relationship to the mean of the outcome.
+To build a linear model the strategy is to make the parameter for the mean of the Gaussian distribution, $\mu$, into a linear function of the predictor variable and other, new parameters we invent. A linear model means that we assume that the predictors have a perfectly constant and additive relationship to the mean of the outcome.
 
 Currently, our model looks like this:
 $$
@@ -226,7 +236,7 @@ $$
 
 How do we add "Bivalve vs Brachiopod" to our model of valve size? 
 
-First, let the mathematical name of the column "taxon" from the tibble `d` be called $x$. This variable $x$ is a predictor variable that can take one of two values: 0 for Biv, and 1 for Bra. Additionally, this vector has the same length as $s$. How do we then express how $x$ describes or predicts the values of $s$?
+First, let the mathematical name of the column "taxon" from the tibble `d` be called $x$. This variable $x$ is a predictor variable that can take one of two values: 0 for Biv(alve), and 1 for Bra(chiopod). Additionally, this vector has the same length as $s$. How do we then express how $x$ describes or predicts the values of $s$?
 
 To get taxonomic group into the model, we need to define $\mu$ as a function of the values in $x$. Here's how we could do this:
 $$
@@ -240,7 +250,7 @@ s_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
 $$
 What do each of the lines in the model represent? What has changed and why?
 
-Where did $\alpha$ and $\beta$ come from? We made them up! $\mu$ and $\sigma$ are necessary and sufficient for describing the Gaussian distribution. $\alpha$ and $\beta$ are devices we invent for manipulating $\mu$, allowing it vary across cases in our data.
+But where did $\alpha$ and $\beta$ come from? We made them up! $\mu$ and $\sigma$ are necessary and sufficient for describing the Gaussian distribution. $\alpha$ and $\beta$ are devices we invent for manipulating $\mu$, allowing it vary across cases in our data.
 
 Making up new parameters like $\alpha$ and $\beta$ is a common strategy for expanding the amount of information in our model. These parameters are targets of our learning -- each must be described in the posterior density. When we want to learn something, we invent a parameter (or parameters) describing it.
 
@@ -251,7 +261,7 @@ In the case of the linear model, $\mu_{i} = \alpha + \beta x_{i}$, we are now as
 
 These two parameters along with $x$ describe a line that passes through $\alpha$ when $x_{i} = 0$ and has slope $\beta$.
 
-Remember that $x$ is a binary vector -- it only takes on one of two values: 0 or 1. For a binary predictor, the regression coefficient is the difference between the averages of the two groups.
+Remember that $x$ is a binary vector -- it only takes on one of two values: 0 or 1. For a binary predictor, the regression coefficient is interepreted as the difference between the averages of the two groups.
 
 Let's think more about this choice of prior. Do you think there is an equal chance that average brachiopod valves are larger or smaller than bivalves? In this context, we have so much data that this is harmless. In other contexts, our sampler might need more information to finds its target.
 
@@ -280,7 +290,7 @@ plot(m_2)
 
 ### Aside: Dummy coding
 
-`brm` and R in general will automatically translate categorical predictors like our taxon variable into what's called *dummy coding*. Here's an illustration of what that means using the subtype veteran from our raw data:
+`brm` and R in general will automatically translate categorical predictors like our taxon variable into what's called *dummy coding*. Here's an illustration of what that means using the subtype variable "sub" from our raw data:
 ```{r}
 r %>%
   distinct(sub)
@@ -293,7 +303,7 @@ r %>%
     model_matrix(~ sub)
 ```
 
-One of the values of the column is designated to be the intercept. In R, the default intercept is the first value of the vector, alphabetically.
+One of the values of the column is designated to be the intercept. In R, the default intercept is the first value of the vector, alphabetically. There are other strategies for encoding categorical variables, but dummy coding is by far the most common -- it helps that it is the R default.
 
 
 ## Interpreting the model fit
@@ -383,7 +393,7 @@ d %>%
 
 ### Posterior prediction
 
-An aspect of Bayesian models we've yet to consider is the *posterior predictive distribution* $p(\tilde{y} | y)$.
+An aspect of Bayesian models we've yet to really consider is the *posterior predictive distribution* $p(\tilde{y} | y)$.
 
 Prediction is when, given our model and parameter estimates, we want to estimate the outcome for some combination of covariates. The posterior predictive distribution is the distribution of outcomes defined by the plausible parameter values and data -- instead of a single prediction, we have a distribution. For example, we might want to predict the log valve length of some species given our model and parameter estimates. For each possible value of a parameter, there is an implied distribution of outcomes. If we compute the distribution of outcomes for each value, this gives us a posterior predictive distribution.
 

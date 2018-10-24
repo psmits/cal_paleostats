@@ -166,7 +166,7 @@ library(tidybayes)</code></pre>
 </div>
 <div id="learning-from-data" class="section level1">
 <h1>Learning from data</h1>
-<p>Bayesian inference is a fancy way of counting and comparing possibilities. As we collect and analyze our data, we learn which possibilities are more plausible than others.</p>
+<p>Bayesian inference is a fancy way of counting and comparing possibilities. As we collect and analyze our data, we learn which possibilities are more plausible than others. The logical strategy is “When we don’t know what caused the data, potential causes that may produce the data in more ways are more plausible.”</p>
 <div id="counting-and-plausibility" class="section level2">
 <h2>Counting and plausibility</h2>
 <p>We’re going to use a simple example from <strong>Statistical Rethinking</strong> to start our thinking about Bayesian analysis.</p>
@@ -311,7 +311,7 @@ plausibility of <span class="math inline">\(p\)</span> after <span class="math i
 </div>
 <div id="building-a-model" class="section level2">
 <h2>Building a model</h2>
-<p>Bayesian inference is made easier by working with probabilities instead of counts, but it looks a lot harder.</p>
+<p>Bayesian inference is made easier by working with probabilities instead of counts, but this makes everything look a lot harder.</p>
 <p><strong>Setup</strong>: We’ve a globe with land and water sections. We want to know how much of the globe is water. Our strategy is to throw the globe up, catch it, and note the surface under the right index finger. Let’s do this 9 times.</p>
 <pre class="r"><code>d &lt;- tibble(toss = c(&quot;w&quot;, &quot;l&quot;, &quot;w&quot;, &quot;w&quot;, &quot;w&quot;, &quot;l&quot;, &quot;w&quot;, &quot;l&quot;, &quot;w&quot;))
 
