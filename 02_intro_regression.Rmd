@@ -211,7 +211,7 @@ We will be discussing the posterior predictive distribution further later in the
 
 Currently, our model doesn't really resemble what we think of as "regression." Typically, we want to understand how the mean of our outcome variable is related to one or more predictor variables. 
 
-Let's start with a basic analysis questions: do Bivalves and Brachiopods differ in valve length? Start by looking at the data.
+Let's start with a basic analysis questions: do Bivalves and Brachiopods differ in valve length and how? Start by looking at the data.
 ```{r}
 d %>%
   mutate(taxon = recode(taxon,
@@ -276,7 +276,7 @@ m_2 <- brm(data = d,
            iter = 2000,                # default
            warmup = 1000,              # 1/2 iter
            chains = 4,                 # each chain is a set of samples
-           cores = 4,                  # parallel processing; this might not work on your computer
+           cores = 4,                  # parallel processing; this might not work on your computer!
            refresh = 0)                # less text output
 ```
 ```{r}
@@ -290,7 +290,7 @@ plot(m_2)
 
 ### Aside: Dummy coding
 
-`brm` and R in general will automatically translate categorical predictors like our taxon variable into what's called *dummy coding*. Here's an illustration of what that means using the subtype variable "sub" from our raw data:
+`brm`, and R in general, will automatically translate categorical predictors like our taxon variable into what's called *dummy coding*. Here's an illustration of what that means using the subtype variable "sub" from our raw data:
 ```{r}
 r %>%
   distinct(sub)
@@ -303,7 +303,10 @@ r %>%
     model_matrix(~ sub)
 ```
 
-One of the values of the column is designated to be the intercept. In R, the default intercept is the first value of the vector, alphabetically. There are other strategies for encoding categorical variables, but dummy coding is by far the most common -- it helps that it is the R default.
+
+One of the values of the column is designated to be the intercept. In R, the default intercept is the first value of the vector, alphabetically. The other variables are called contrasts or dummy variables -- they describe the difference in mean value when compared to the intercept. By adding the intercept and the regression coefficient, you get the estimated mean for that group. If the categorical variable has $k$ states, then there are $k - 1$ contrasts or dummy variables.
+
+There are [many other strategies for encoding categorical variables](https://stats.idre.ucla.edu/r/library/r-library-contrast-coding-systems-for-categorical-variables/), but dummy coding is by far the most common -- it helps that it is the R default.
 
 
 ## Interpreting the model fit
@@ -337,7 +340,7 @@ The third line is the standard deviation term $\sigma$, which describes the with
 
 Our regression model describes a line with an intercept and a slope. As demonstrated above, this is true even in the case of a binary predictor -- even though our predictor can only take one of two values, the formula still describes a line.
 
-The function `brms::add_fitted_draws()` estimates the expected log valve length from the linear model part of our model. Remember that the linear model describes only the mean log valve length, and not the spread in log valve length. This function is a convenient way to help us visualize this part of our model.
+The function `brms::add_fitted_draws()` estimates the expected log valve length from the linear model part of our model. Remember that the linear model describes only the *mean* log valve length, and not the *spread* of log valve length. This function is a convenient way to help us visualize this part of our model.
 
 Here's an illustration of the linear relationship between taxonomic group and log valve size as described by the median estimates for each taxonomic group:
 ```{r}
@@ -393,13 +396,13 @@ d %>%
 
 ### Posterior prediction
 
-An aspect of Bayesian models we've yet to really consider is the *posterior predictive distribution* $p(\tilde{y} | y)$.
+An aspect of Bayesian models we've yet to discuss at length is the *posterior predictive distribution* $p(\tilde{y} | y)$.
 
-Prediction is when, given our model and parameter estimates, we want to estimate the outcome for some combination of covariates. The posterior predictive distribution is the distribution of outcomes defined by the plausible parameter values and data -- instead of a single prediction, we have a distribution. For example, we might want to predict the log valve length of some species given our model and parameter estimates. For each possible value of a parameter, there is an implied distribution of outcomes. If we compute the distribution of outcomes for each value, this gives us a posterior predictive distribution.
+Prediction is when, given our model and parameter estimates, we want to estimate the outcome for some combination of covariates. The posterior predictive distribution is the distribution of outcomes defined by the plausible parameter values and data -- instead of a single prediction, we have a distribution of predictions. For example, we might want to predict the log valve length of some species given our model and parameter estimates. For each possible value of a parameter, there is an implied distribution of outcomes. If we compute the distribution of outcomes for each value, this gives us a posterior predictive distribution.
 
-Our full model describes log valve length as a Gaussian distribution with mean (as a linear model) and standard deviation. Our previous plots only considered the linear model aspect which describes the mean of the distribution, but there is still more information in our model: the estimated standard deviation $\sigma$. 
+Our full model describes log valve length as a Gaussian distribution with a mean (as a linear model) and a standard deviation. Our previous plots only considered the linear model aspect which describes the mean of the distribution, but there is still more information in our model that we've yet to consider: the estimated standard deviation $\sigma$. 
 
-The `brms::add_predicted_draws()` function does this exactly. For each "new" observation, we obtain a prediction of that observations log valve length, not just the *expected* value of log valve length. This function is similar to the `brms::add_fitted_draws()` function we used above, but instead of predicting from the linear model we are predicting from the entire distribution.
+The `brms::add_predicted_draws()` function does this exactly. For each "new" observation, we obtain a series of predictions about that observations log valve length, not just the *expected* value of log valve length. This function is similar to the `brms::add_fitted_draws()` function we used above, but instead of predicting from the linear model we are predicting from the entire distribution.
 
 Let's illustrate this by comparing our log valve length data to our posterior predictive distribution for that data:
 ```{r}
@@ -429,7 +432,14 @@ d %>%
 
 What if we want to test how well our model fits specific parts of our data, and not just compare the similarities of their distributions? For example, how well does our model estimate the mean log valve size of each taxon? 
 
-Here's the logic of posterior predictive tests: if data simulated from our posterior predictive distribution is able to reproduce a specific aspect of the original data, then the model might be doing something right. And if there are systematic failures in our model's ability to predict the data, then the model must be doing something wrong.
+Here's the logic of posterior predictive tests: if data simulated from our posterior predictive distribution is able to reproduce a specific aspect of the original data, then the model *might* be doing something right. And if there are systematic failures in our model's ability to predict the data, then the model *must* be doing something wrong.
+
+Remember the warnings from last lesson: 
+
+> The goal when evaluating your model is not to test the truth of the model's assumptions. Our model's assumptions can never be exactly right and are not the true data generating process. Failure to prove that our model false is a failure of our imagination, not a success of our model. Additionally, a model doesn't have to be true in order to produce precise and useful inference. Models are information processing machines, and there are parts of information that cannot be easily represented by framing our problem in terms of the truth of our assumptions.
+> 
+> Instead, our objective should be to test the model's adequacy for some *purpose*. What are we trying to learn? This means asking and answering more questions than those originally used to construct our model. Think about what you know as a domain expert and compare it to your model; if there is a conflict you should update your model (likelihood and/or prior) to better reflect your domain knowledge. It is hard to give general advice on model evaluation as there are lots of different contexts for evaluating the adequacy of a model -- prediction, comprehension, measurement, and persuasion. These are inherently *scientific questions*, not statistical questions. As I said earlier, robot's can't do this step for you.
+
 
 Here's are a few example posterior predictive tests:
 ```{r}
@@ -483,4 +493,4 @@ Even though it should be obvious and mandatory to do go through with and report 
 
 # Summary
 
-To review, this lesson was an exercise in developing, communicating, and summarizing a Bayesian model -- specifically, a linear regression model. We've slowly developed a linear regression model by expanding a Gaussian distribution to include the effects of predictor information. We first developed our model using the symbolic representation of a statistical model, and we then implemented our model using functions from **brms**. Finally, we explored a number of ways of representing and visualizing posterior distributions; these included tables and figures. Finally, we briefly covered the difference between fitted predictions and the posterior predictive distribution.
+To review, this lesson was an exercise in developing, communicating, and summarizing a Bayesian model -- specifically, a linear regression model. We've slowly developed a linear regression model by expanding a Gaussian distribution to include the effects of predictor information. We first developed our model using the symbolic representation of a statistical model, and we then implemented our model using functions from **brms**. We explored a number of ways of representing and visualizing posterior distributions; these included tables and figures. We briefly covered the difference between fitted predictions and the posterior predictive distribution. Finally, we discussed the concept of posterior predictive tests.
