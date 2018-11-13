@@ -1,0 +1,162 @@
+---
+title: "Introduction to Graph/Network Analysis"
+output: 
+  html_document: 
+    toc: true 
+    toc_depth: 2
+---
+
+
+# Objectives
+
+- Learn what we mean by "graph."
+- How to make a graph from fossil occurrence data.
+- Become familiar with the `igraph` package.
+
+[](https://www.jessesadler.com/post/network-analysis-with-r/)
+
+## `igraph`
+
+`igraph` is a large library of graph theory related functions which is available for C, python, and R. We will be using the R package, but much of what we will cover is general in nature. Additionally, most packages that interface with igraph have joint documentation -- you'll need to understand `igraph` in order to use `tidygraph`.
+
+`igraph` began development well before the tidyverse, so it does not natively support a lot of the grammar we might be used to. The packages `tidygraph` and `ggraph` fill-in this missing functionality. 
+
+```{r message = F, results = 'hide'}
+library(tidyverse)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+```
+
+
+# What is a "graph?"
+
+Every graph has at least two components: nodes and edges.
+
+Nodes are the members of the graph whose relations we describe. Nodes can represent anything that has relations e.g. person, fossil, bone, etc. Nodes can also be referred to as vertices, so software documentation is all over the place.
+
+Edges are the links between one node and another (including itself). An edge that connects a node to itself is called a *self-edge*. An edge cannot connect more than two nodes together, that would require more edges. Edges can also be referred to as links.
+
+
+
+We can write a graph definition as $G(n, m)$, where $n$ is the number of nodes in the graph and $m$ is the number edges.
+
+Sometimes we might identify a graph as $G(n, p)$, where $n$ is the number of nodes in the graph and $p$ is the edge probability -- this is common in the context of random graphs.
+
+
+
+First, we're going to practice making graphs by hand. This activity will prepare us for making graphs from our actual data.
+
+```{r}
+(edge_list <- tibble(from = c(1, 2, 2, 3, 4),
+                    to = c(2, 3, 4, 2, 1))) # define the relationships
+(node_list <- tibble(id = 1:4))        # name the nodes
+
+(g1 <- tbl_graph(nodes = node_list, 
+                edges = edge_list, 
+                directed = FALSE))
+```
+
+Let's take a look at the graph we've created.
+```{r}
+ggraph(g1) + 
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = id), repel = TRUE) +
+  theme_graph() 
+```
+
+
+## Types of graphs
+
+Standard graph 
+
+
+Bipartite graph
+
+
+
+## Random graphs
+
+Sometimes we want to generate a random graph instead of writing one out by hand. There are many ways to generate random graphs. `tidygraph` defines four types of "games," or ways to generate random graphs: component, evolution, sampling, and type. Here we will briefly discuss one example of each of these game types. None of these approaches are necessarily better than the others, but each can be very useful for many reasons. After all, truth only exists in simulation.
+
+
+### Component games
+
+Generate graphs that simulate a topology of connected subgraphs. 
+
+```{r}
+block_size <- c(30, 70)
+pref_matrix <- matrix(c(0.1, 0.001, 0.001, 0.05), nrow = 2)
+
+play_blocks(n = 100,                   # how many nodes
+            size_blocks = block_size,  # size of each block
+            p_between = pref_matrix)   # connectedness probability matrix
+```
+
+
+### Evolution games
+
+Create graphs through "evolutionary" mechanism (*not* biological)
+
+```{r}
+play_barabasi_albert(n = 100,          # number of nodes
+                     power = 1)        # attachment power (default = 1)
+```
+
+
+### Sampling games
+
+Created directly by sampling of different attributes, topologies, etc.
+
+```{r}
+play_erdos_renyi(n = 100,              # nodes
+                 p = 0.1)              # probability of edge occurring
+```
+
+
+### Type games
+
+There are based on there being different types of nodes and then simulating their interactions.
+
+```{r}
+play_bipartite(n1 = 30,                # nodes in "top" part
+               n2 = 70,                # nodes in "bottom" part
+               p = 0.1)                # probability of edge
+```
+
+
+
+# Working with graphs
+```{r}
+g2 <- play_erdos_renyi(n = 100,        # nodes
+                       p = 0.1)        # probability of edge occurring
+```
+
+## Describing a graph
+
+```{r}
+g2 %>%
+  mutate(degree = centrality_degree(),
+         close = centrality_closeness(),
+         eigen = centrality_eigen(),
+         between = centrality_betweenness(),
+         pagerank = centrality_pagerank())
+
+degree_distribution(g2)
+
+edge_density(g2)
+
+diameter(g2)
+
+get_diameter(g2)
+```
+
+
+
+## Subgroups and communities
+
+
+
+
+# Making a graph from PBDB occurrence data

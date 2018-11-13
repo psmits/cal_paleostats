@@ -1,9 +1,9 @@
 ---
 title: "Linear Regression"
 output: 
-html_document: 
-toc: true 
-toc_depth: 2
+  html_document: 
+    toc: true 
+    toc_depth: 2
 ---
 
 
@@ -90,7 +90,7 @@ d %>%
 We want a measurement variable to model as a Gaussian distribution. The Gaussian distribution has two parameters describing the shape of the distribution -- mean $\mu$ and standard deviation $\sigma$. Here's a quick picture of a Gaussian distribution, play around with the mean and standard deviation parameters.
 ```{r}
 ggplot(data = tibble(x = seq(from = -25, to = 25, by = 0.1)),
-       aes(x = x, y = dnorm(x, mean = 0, sd = 1))) +
+       aes(x = x, y = dnorm(x, mean = 5, sd = 1000))) +
   geom_line() +
   scale_y_continuous(NULL, breaks = NULL)
 ```
@@ -134,8 +134,8 @@ But what do these distributions *mean* for the distribution of log valve lengths
 ```{r}
 n <- 1e4                               # number of samples
 
-tibble(sample_mu = rnorm(n, mean = 3, sd = 10),
-       sample_sigma = runif(n, min = 0, max = 20)) %>%
+tibble(sample_mu = rnorm(n, mean = 5, sd = 5),
+       sample_sigma = runif(n, min = 0, max = 10)) %>%
   mutate(x = rnorm(n, mean = sample_mu, sd = sample_sigma)) %>% # joint distribution
   ggplot(aes(x = x)) +
   stat_density() +
