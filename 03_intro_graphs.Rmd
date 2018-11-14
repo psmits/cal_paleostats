@@ -36,7 +36,7 @@ library(tidygraph)
 
 # What is a "graph?"
 
-A graph is a set of objects and in which some pairs of the objects are "related." The objects are called nodes (or vertices) and pairs of nodes are related by edges (or links). These edges can be either directed or undirected. While there are many kinds of graphs, all are representations of relational data.
+A graph is a set of objects and in which some pairs of the objects are "related." The objects are called nodes (or vertices) and pairs of nodes are related by edges (or links). These edges can be either directed or undirected, and they can be weighted or unweighted. While there are many kinds of graphs, all are representations of relational data.
 
 A typical graph can be expressed as an ordered pair of vectors $G = (V, E)$, with $V$ being the set of nodes and $E$ being set of edges, each of which is defined by the related pair of nodes. The order of a graph is the number of nodes in the graph, $|V|$. The size of a graph is the number of edges in the graph, $|E|$.
 
@@ -51,14 +51,15 @@ $$
 $$
 Try drawing this graph out by hand first.
 
+Now let's make a graph using the edge list.
 ```{r}
 edge_list <- tibble(from = c(1, 2, 2, 4),
                     to =    c(2, 3, 4, 1)) # define the relationships
 node_list <- tibble(id = 1:4)          # name the nodes
 
 g1 <- tbl_graph(nodes = node_list, 
-                 edges = edge_list, 
-                 directed = FALSE)
+                edges = edge_list, 
+                directed = FALSE)
 
 # what does this object *look* like?
 print(g1)
@@ -67,6 +68,64 @@ ggraph(g1) +
   geom_edge_link() +
   geom_node_point(size = 5) +
   geom_node_text(aes(label = id), repel = TRUE) +
+  theme_graph() 
+```
+
+
+Edge lists are not the only way of representing relational data. Another common format is the "adjacency matrix." This is a square matrix of nodes by nodes, with the corresponding element being 1 if they share an edge or 0 if not. You might be familiar with these from ecology where they are called co-occurrence matrices, and the induced graph called a co-occurrence network.
+
+Here is the basic strategy for making a graph object from an adjacency matrix. If the adjacency matrix is symmetrical then the induced graph is undirected. If the square adjacency matrix is not symmetrical, then it could be a directed graph. 
+
+```{r}
+# random adjacency matrix
+adjm <- matrix(c(0, 1, 0, 1,
+                 1, 0, 1, 1,
+                 0, 1, 0, 0,
+                 1, 1, 0, 0),          # symmetrical
+               ncol = 4)
+
+# what does an adjacency matrix *look* like?
+print(adjm)
+
+as_tbl_graph(adjm, directed = FALSE) %>%
+  ggraph(.) +
+  geom_edge_link() +
+  geom_node_point(size = 5) +
+  theme_graph() 
+```
+
+Sometimes a graph can have weighted edges, where some connections are considered greater than others. For example, if nodes represent communities than the weight of the edge can represent the number of shared species between those communities.
+
+Here is an example of making a graph from an edge list with weights.
+```{r}
+edge_list <- tibble(from = c(1, 2, 2, 4),
+                    to =    c(2, 3, 4, 1),
+                    weight = c(1, 2, 2, 1)) # define the relationships
+node_list <- tibble(id = 1:4)          # name the nodes
+
+g2 <- tbl_graph(nodes = node_list, 
+                edges = edge_list, 
+                directed = FALSE)
+
+ggraph(g2) +
+  geom_edge_link(aes(width = weight)) +
+  geom_node_point(size = 5) +
+  theme_graph() 
+```
+
+When making a graph from an adjacency matrix, the elements can be used to represent the weights. 
+```{r}
+# random adjacency matrix
+adjm2 <- matrix(c(0, 1, 0, 1,
+                  1, 0, 2, 2,
+                  0, 2, 0, 0,
+                  1, 2, 0, 0),          # symmetrical
+                ncol = 4)
+
+as_tbl_graph(adjm2, directed = FALSE) %>%
+  ggraph(.) +
+  geom_edge_link(aes(width = weight)) +
+  geom_node_point(size = 5) +
   theme_graph() 
 ```
 
@@ -86,7 +145,7 @@ $$
 Try drawing this graph out by hand first.
 
 ```{r}
-g2 <- make_bipartite_graph(types = c(0, 0, 0, 1, 1),  # node membership
+g3 <- make_bipartite_graph(types = c(0, 0, 0, 1, 1),  # node membership
                            edges = c(1, 4, 
                                      1, 5,
                                      2, 5,
@@ -94,114 +153,47 @@ g2 <- make_bipartite_graph(types = c(0, 0, 0, 1, 1),  # node membership
   as_tbl_graph()
 
 # what does this object *look* like?
-print(g2)
+print(g3)
 
-ggraph(g2, layout = 'bipartite') +
+ggraph(g3, layout = 'bipartite') +
   geom_edge_link() +
   geom_node_point(aes(colour = type), 
                   size = 5) +
-  theme_graph()
+  theme_graph() +
+  scale_colour_manual(values = c('goldenrod', 'skyblue'))
 ```
 
-A bipartite network can also be called two-mode graph because it can be projected into two one-mode networks.
+A bipartite network can also be called two-mode graph because it can be projected into two one-mode networks. Each of the one-mode networks summarize only one set of nodes by compressing the second set of nodes into the edges of the first. This is intuitive to visualize. 
 
-
-## Random graphs
-
-Sometimes we want to generate a random graph instead of writing one out by hand -- it certainly makes writing examples easier! There are many ways to generate random graphs. `tidygraph` defines four types of "games," or ways to generate random graphs: component, evolution, sampling, and type. Here we will briefly discuss one example of each of these game types. None of these approaches are necessarily better than the others, but each can be very useful for many reasons. After all, truth only exists in simulation.
-
-In `tidygraph` all of the functions for generating random graphs have the predicate `play_*`. I'm only introducing one example from each game, but you are encouraged to explore what other options exist.
-
-
-### Sampling games
-
-Let's start with the classic Erdos-Renyi graph model. This model has its own classic notation that breaks some of earlier statements. The Erdos-Renyi graph model is defined two ways: a random graph defined be the number of nodes $n$ and the probability of an edge occurring $p$, $G(n, p)$; or a random graph defined by the number of nodes $n$ and the number of edges $m$, $G(n, m)$.
-
-A major statistical property of the Erdos-Renyi model is that the generated graph should have a Poisson degree distribution for large $n$. It also turns out that this is a terrible model of real world networks because degree distribution real world networks are believed to be much more heavily tailed than the Poisson distribution..
-
+First, draw out what you think the two one-mode projections look like. Then compare with this code snippet.
 ```{r}
-play_erdos_renyi(n = 100,              # nodes
-                 p = 0.1) %>%          # probability of edge occurring
-  ggraph(.) +
+g3_proj <- bipartite_projection(g3) %>%
+  map(., ~ as_tbl_graph(.x, directed = FALSE))
+
+print(g3_proj)
+
+# first projection
+ggraph(g3_proj[[1]]) +
   geom_edge_link() +
-  geom_node_point(size = 5) +
+  geom_node_point(colour = 'goldenrod',
+                  size = 5) +
   theme_graph()
-```
 
-
-### Evolution games
-
-The Barabasi-Albert model is slightly more realistic model or real world networks than the Erdos-Renyi model. Conceptually, the Barabasi-Albert model incorporates the concepts of growth and preferential attachment. 
-
-Growth means that the number of nodes in the network increases over time. This means that the network begins with a base number of connected nodes and then adds more nodes and edges one node at a time.
-
-Preferential attachment means that the more edges a node has, the more likely it is to gain more edges. As the network grows, a node with a high degree has a stronger ability to add edges to the network than a node with few edges.
-
-The Barabasi-Albert model generates scale-free networks, meaning that the degree distribution follows a power law. In the Barabasi-Albert model's case, the fraction $P(k)$ of nodes in the network having $k$ edges is
-$$
-P(k) \sim k^{-3}.
-$$
-
-```{r}
-play_barabasi_albert(n = 100,          # number of nodes
-                     power = 1,        # attachment power (default = 1)
-                     growth = 1) %>%   # default = 1
-  ggraph(.) +
+# second projection
+ggraph(g3_proj[[2]]) +
   geom_edge_link() +
-  geom_node_point(size = 5) +
-  theme_graph()
-```
-
-
-
-### Type games
-
-We've already been introduced to bipartite graphs above when we wrote one out by hand. That's very tedious. Here's a function for generating a random bipartite network. You have to define the order of each set of nodes and the probability that a node from each set have an edge. Edges are assigned in the exact same manner as the Erdos-Renyi graph model.
-
-```{r}
-play_bipartite(n1 = 30,                # nodes in "top" part
-               n2 = 70,                # nodes in "bottom" part
-               p = 0.1) %>%            # probability of edge
-  ggraph(., layout = 'bipartite') +
-  geom_edge_link() +
-  geom_node_point(aes(colour = type),
+  geom_node_point(colour = 'skyblue',
                   size = 5) +
   theme_graph()
 ```
 
 
-### Component games
+## Making a graph from PBDB occurrence data
 
-Sometimes we want to generate one-way graphs with defined "communities," or two or more sections of the graph which are more connected within that section than between the sections. These type of random graphs are very useful for testing community detection algorithms, which will be introduced later.
+Now that we've covered a lot of the basics behind graphs and how to make them, let's start apply this knowledge to some fossil occurrence information. 
 
-This type of graph is conceptually and fundamentally very different from a bipartite network where the nodes in a set cannot be connected to any other nodes in the same set. Additionally, the community memberships are not returned, something that will be introduced later when we cover community detection algorithms.
+A relatively recent innovation in paleobiology is the application of networks to understanding fossil occurrences in space and time. These 
 
-The stochastic block model is the simplest "component game." First, we need to define how many total nodes there are. Second, the block memberships of the nodes are defined. Finally, we define a preference matrix which describes the probability of connections within and between the different components. Edges are assigned in the same manner as the Erdos-Renyi graph model using the approach probability as defined in the preference matrix.
-
-```{r}
-block_size <- c(30, 70)
-pref_matrix <- matrix(c(0.1, 0.005, 
-                        0.001, 0.05), nrow = 2)
-
-play_blocks(n = 100,                   # how many nodes
-            size_blocks = block_size,  # size of each block
-            p_between = pref_matrix) %>% # connectedness probability matrix
-  ggraph(.) +
-  geom_edge_link() +
-  geom_node_point(size = 5) +
-  theme_graph()
-```
-
-
-# Making a graph from PBDB occurrence data
-
-Now that we've covered a lot of the basics behind graphs and how to make them, let's apply this knowledge to some fossil occurrence information. 
-
-A relatively recent inovation in paleobiology is the application of networks to understanding biogeographic occurrences of fossils. 
-
-Regions
-
-Biogeographic networks
 
 
 For this exercise we will be using the Miocene record of Canidae. Our data will be sourced directly from the Paleobiology Database. I'm using the following automatic filtering criteria: taxonomic name Canidae, interval Miocene, identity resolved at least to genus (lumping genus and species as a single occurrence), only valid taxonomic names, and will all metadata. I've formulated this as a url so we can directly query the PBDB from our code. For more information how to to format this url call, check out the [API documentation](https://paleobiodb.org/data1.2/).
@@ -242,5 +234,92 @@ print(canidae)
 ## Subgroups and communities
 
 
+
+
+
+
+# Random graphs
+
+Sometimes we want to generate a random graph instead of writing one out by hand -- it certainly makes writing examples easier! There are many ways to generate random graphs. `tidygraph` defines four types of "games," or ways to generate random graphs: component, evolution, sampling, and type. Here we will briefly discuss one example of each of these game types. None of these approaches are necessarily better than the others, but each can be very useful for many reasons. After all, truth only exists in simulation.
+
+In `tidygraph` all of the functions for generating random graphs have the predicate `play_*`. I'm only introducing one example from each game, but you are encouraged to explore what other options exist.
+
+
+## Sampling games
+
+Let's start with the classic Erdos-Renyi graph model. This model has its own classic notation that breaks some of earlier statements. The Erdos-Renyi graph model is defined two ways: a random graph defined be the number of nodes $n$ and the probability of an edge occurring $p$, $G(n, p)$; or a random graph defined by the number of nodes $n$ and the number of edges $m$, $G(n, m)$.
+
+A major statistical property of the Erdos-Renyi model is that the generated graph should have a Poisson degree distribution for large $n$. It also turns out that this is a terrible model of real world networks because degree distribution real world networks are believed to be much more heavily tailed than the Poisson distribution..
+
+```{r}
+play_erdos_renyi(n = 100,              # nodes
+                 p = 0.1) %>%          # probability of edge occurring
+  ggraph(.) +
+  geom_edge_link() +
+  geom_node_point(size = 5) +
+  theme_graph()
+```
+
+
+## Evolution games
+
+The Barabasi-Albert model is slightly more realistic model or real world networks than the Erdos-Renyi model. Conceptually, the Barabasi-Albert model incorporates the concepts of growth and preferential attachment. 
+
+Growth means that the number of nodes in the network increases over time. This means that the network begins with a base number of connected nodes and then adds more nodes and edges one node at a time.
+
+Preferential attachment means that the more edges a node has, the more likely it is to gain more edges. As the network grows, a node with a high degree has a stronger ability to add edges to the network than a node with few edges.
+
+The Barabasi-Albert model generates scale-free networks, meaning that the degree distribution follows a power law. In the Barabasi-Albert model's case, the fraction $P(k)$ of nodes in the network having $k$ edges is
+$$
+P(k) \sim k^{-3}.
+$$
+
+```{r}
+play_barabasi_albert(n = 100,          # number of nodes
+                     power = 1,        # attachment power (default = 1)
+                     growth = 1) %>%   # default = 1
+  ggraph(.) +
+  geom_edge_link() +
+  geom_node_point(size = 5) +
+  theme_graph()
+```
+
+
+
+## Type games
+
+We've already been introduced to bipartite graphs above when we wrote one out by hand. That's very tedious. Here's a function for generating a random bipartite network. You have to define the order of each set of nodes and the probability that a node from each set have an edge. Edges are assigned in the exact same manner as the Erdos-Renyi graph model.
+
+```{r}
+play_bipartite(n1 = 30,                # nodes in "top" part
+               n2 = 70,                # nodes in "bottom" part
+               p = 0.1) %>%            # probability of edge
+  ggraph(., layout = 'bipartite') +
+  geom_edge_link() +
+  geom_node_point(aes(colour = type),
+                  size = 5) +
+  theme_graph()
+```
+
+
+## Component games
+
+Sometimes we want to generate one-way graphs with defined "communities," or two or more sections of the graph which are more connected within that section than between the sections. These type of random graphs are very useful for testing community detection algorithms. This type of graph is conceptually and fundamentally very different from a bipartite network where the nodes in a set cannot be connected to any other nodes in the same set. Additionally, the community memberships are not returned.
+
+The stochastic block model is the simplest "component game." First, we need to define how many total nodes there are. Second, the block memberships of the nodes are defined. Finally, we define a preference matrix which describes the probability of connections within and between the different components. Edges are assigned in the same manner as the Erdos-Renyi graph model using the approach probability as defined in the preference matrix.
+
+```{r}
+block_size <- c(30, 70)
+pref_matrix <- matrix(c(0.1, 0.005, 
+                        0.001, 0.05), nrow = 2)
+
+play_blocks(n = 100,                   # how many nodes
+            size_blocks = block_size,  # size of each block
+            p_between = pref_matrix) %>% # connectedness probability matrix
+  ggraph(.) +
+  geom_edge_link() +
+  geom_node_point(size = 5) +
+  theme_graph()
+```
 
 
