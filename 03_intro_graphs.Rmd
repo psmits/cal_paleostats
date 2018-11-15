@@ -15,8 +15,7 @@ output:
 - Learn some basic network summary statistics.
 - Introduce the basics of community detection algorithms.
 
-
-This tutorial/primer is inspired and based on material presented in [this blog post](https://www.jessesadler.com/post/network-analysis-with-r/), [this tutorial](http://kateto.net/networks-r-igraph), the [`igraph` documentation](http://igraph.org/r/), the [`tidygraph` documentation](https://cran.r-project.org/web/packages/tidygraph/index.html), and the [`ggraph` documentation](https://cran.r-project.org/web/packages/ggraph/index.html).
+This tutorial/primer is inspired and based on material presented in [this blog post](https://www.jessesadler.com/post/network-analysis-with-r/), [this tutorial](http://kateto.net/networks-r-igraph), [this RPub](https://rpubs.com/pjmurphy/317838), the [`igraph` documentation](http://igraph.org/r/), the [`tidygraph` documentation](https://cran.r-project.org/web/packages/tidygraph/index.html), and the [`ggraph` documentation](https://cran.r-project.org/web/packages/ggraph/index.html).
 
 
 
@@ -28,6 +27,7 @@ This tutorial/primer is inspired and based on material presented in [this blog p
 
 ```{r message = F, results = 'hide'}
 library(tidyverse)
+library(viridis)                       # good continuous color palette
 library(igraph)
 library(ggraph)
 library(tidygraph)
@@ -130,7 +130,7 @@ as_tbl_graph(adjm2, directed = FALSE) %>%
 ```
 
 
-## Bipartite graph
+## Bipartite graphs
 
 Bipartite graphs are a special type of graph that is particularly relevant to (paleo)biological analysis. In a bipartite graph the nodes are divided into two disjoint and independent sets, $U$ and $V$. Disjoint and independent means that nodes *within* each set do not share any connections, but that there are only connections between nodes of *different* sets. We amend our earlier notation for a graph to $G = (U, V, E)$ to denote these two distinct sets of nodes.
 
@@ -173,14 +173,14 @@ g3_proj <- bipartite_projection(g3) %>%
 print(g3_proj)
 
 # first projection
-ggraph(g3_proj[[1]]) +
+ggraph(g3_proj$proj1) +
   geom_edge_link() +
   geom_node_point(colour = 'goldenrod',
                   size = 5) +
   theme_graph()
 
 # second projection
-ggraph(g3_proj[[2]]) +
+ggraph(g3_proj$proj2) +
   geom_edge_link() +
   geom_node_point(colour = 'skyblue',
                   size = 5) +
@@ -188,57 +188,200 @@ ggraph(g3_proj[[2]]) +
 ```
 
 
-## Making a graph from PBDB occurrence data
+## Graph from PBDB occurrence data
 
 Now that we've covered a lot of the basics behind graphs and how to make them, let's start apply this knowledge to some fossil occurrence information. 
 
-A relatively recent innovation in paleobiology is the application of networks to understanding fossil occurrences in space and time. These 
+A relatively recent innovation in paleobiology is the application of networks to understanding fossil occurrences in space and time. These networks appear either as co-occurrence networks or bipartite taxon-locality networks. We're going to cover how to make both. We're going to start by making a bipartite network and then use the one-mode projections to give us co-occurrence networks.
 
-
-
-For this exercise we will be using the Miocene record of Canidae. Our data will be sourced directly from the Paleobiology Database. I'm using the following automatic filtering criteria: taxonomic name Canidae, interval Miocene, identity resolved at least to genus (lumping genus and species as a single occurrence), only valid taxonomic names, and will all metadata. I've formulated this as a url so we can directly query the PBDB from our code. For more information how to to format this url call, check out the [API documentation](https://paleobiodb.org/data1.2/).
+For this exercise we will be using the Quaternary record of Canidae. Our data will be sourced directly from the Paleobiology Database. I'm using the following automatic filtering criteria: taxonomic name Canidae, interval Quaternary, identity resolved at least to genus (lumping genus and species as a single occurrence), only valid taxonomic names, and will all metadata. I've formulated this as a url so we can directly query the PBDB from our code. For more information how to to format this url call, check out the [API documentation](https://paleobiodb.org/data1.2/).
 
 ```{r}
-url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Miocene&idreso=lump_genus&taxon_status=valid&show=full'
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&idreso=lump_genus&taxon_status=valid&show=full'
 
 canidae <- read_csv(file = url) %>%
-  filter(!is.na(formation))
+  filter(!is.na(formation),            # need formation information
+         !str_detect(formation, '[:punct:]')) %>% # get rid of ambiguity
+  mutate(formation = str_to_title(formation)) # consistency
 
-print(canidae)
+# make a taxon-locality graph
+canidae_graph <- canidae %>%
+  dplyr::select(accepted_name, formation) %>%
+  distinct() %>%                       # only unique genus-formation pairs
+  graph.data.frame(., directed = FALSE) %>%
+  as_tbl_graph(.) %>%                  # make it nice
+  activate(nodes) %>%                  # focus on node properties
+  mutate(type = bipartite_mapping(.)$type, # place in a partition
+         type_name = case_when(type == TRUE ~ 'Formation',
+                               type == FALSE ~ 'Genus'))
+
+# look at this graph object
+print(canidae_graph)
+
+# visualize the bipartite graph
+ggraph(canidae_graph, layout = 'bipartite') + # there is no *best* layout
+  geom_edge_link() +
+  geom_node_point(aes(colour = type_name),
+                  size = 5) +
+  theme_graph() +
+  scale_colour_manual(values = c('goldenrod', 'skyblue'))
 ```
 
+This network that we've just made and visualized is a biogeographic occurrence network which Canidae genera appear in various geological formations. 
 
+As demonstrated earlier, the bipartite network encodes a lot of information including both one-mode projections which describe genus-genus co-occurrence where edges represent occuring in the same formation, and formation-formation co-occurrence where edges represent genera occurring in both formations.
 
-
-## Describing a graph
-
+When we make these one-mode projections edge weights are calculated as the edge multiplicity. This means that, for example, if Location A and Location B share Species 1 and Species 2, the edge connecting Locations A and B has weight 2.
 ```{r}
-#g3 %>%
-#  mutate(degree = centrality_degree(),
-#         close = centrality_closeness(),
-#         eigen = centrality_eigen(),
-#         between = centrality_betweenness(),
-#         pagerank = centrality_pagerank())
-#
-#degree_distribution(g3)
-#
-#edge_density(g3)
-#
-#diameter(g3)
-#
-#get_diameter(g3)
+# decompose into the one-mode networks for co-occurrence 
+canidae_graph_proj <- bipartite_projection(canidae_graph) %>%
+  map(., ~ as_tbl_graph(.x, directed = FALSE))
+
+# look at this new object
+print(canidae_graph_proj)
+
+# genus co-occurrence network
+ggraph(canidae_graph_proj$proj1) +
+  geom_edge_link() +
+  geom_node_point(size = 5,
+                  colour = 'skyblue') +
+  geom_node_text(aes(label = name), 
+                  repel = TRUE) +
+  theme_graph()
+
+# formation co-occurrence network
+ggraph(canidae_graph_proj$proj2) +
+  geom_edge_link() +
+  geom_node_point(size = 5,
+                  colour = 'goldenrod') +
+  geom_node_text(aes(label = name), 
+                  repel = TRUE) +
+  theme_graph()
 ```
 
+
+
+
+# Describing a graph
+
+Now that we've made our graph, what do we do with it? What properties of our graph might be interesting? 
+
+
+## Centrality
+
+The major category of summary statistics are centrality measures -- how close is each node to the "center" of the graph? There are many different kinds of centrality measures, each with their own logic. A famous example is the PageRank algorithm which is the core of the Google search engine. All centrality measures are properties of the nodes. 
+Here is a very brief introduction to five different centrality measures. 
+
+- **Degree centrality** is the number of edges associated with that node. The degree distribution is a common focus of statistical analysis.
+
+- **Closeness** is the inverse of the average length of the shortest path between that node and all other nodes.
+
+- **Eigenvector centrality** scores correspond to the values of the first eigenvector of the graph adjacency matrix. This measure can be interpreted reciprocally as the centrality of each node is proportional to the sum of the centralities of those nodes to whom he or she is connected. If you keep working with graphs, you will learn that the spectral properties of a graph (e.g. eigenvectors) have a lot of important properties. For example, the leading eigenvalue of a predator-prey network is a measure of [community stability](http://www.nature.com/nature/journal/v238/n5364/abs/238413a0.html).
+
+- **Betweenness** is roughly defined as the number of shortest paths that path through that node -- how central is that node for getting from one node to another.
+
+- **PageRank** follows the logic that important nodes are connected to other important nodes.
+
+There are many more -- tidygraph uses the common predicate `centrality_*`, so I encourage you to check out some of the other options.
+
+Most centrality measures are not properly defined for bipartite networks as they assume all nodes belong to the same set. This does not mean these function calls will fail, just that the answer might not be what we expect. 
+
+Let's apply these centrality measures to our genus-genus co-occurrence network.
+```{r}
+canidae_graph_proj$proj1 %>%
+  activate(nodes) %>%                  # focus on the nodes
+  mutate(degree = centrality_degree(),
+         pagerank = centrality_pagerank()) %>%
+  ggraph() +
+  geom_edge_link() +
+  geom_node_point(aes(size = degree,
+                      colour = pagerank)) +
+  theme_graph() +
+  scale_colour_viridis()
+
+```
 
 
 ## Subgroups and communities
 
+A common desire in paleobiological analysis of graphs is estimating the presence of [distinct communities](https://en.wikipedia.org/wiki/Community_structure) -- two or more groups of nodes that are more highly connected within each group than between the groups. For example, [Muscente et al. PNAS 2018](http://www.pnas.org/content/115/20/5217) is mostly just community detection applied to a taxon-taxon co-occurrence graph.
+
+Community detection algorithms are complicated and highly varied. There are many community detection algorithms which take many different approaches to breaking up the network. 
+
+Here is a brief introduction to a few commonly used algorithms:
+
+- **Clustering** algorithms like the well-known standard *hierarchical clustering* can be applied to networks.
+
+- **Modularity** based methods. Modularity is the "strength" of division in a network. The modularity of a network is the fraction of edges that fall within a group minus the expected fraction if edges were assigned randomly. High modularity means there dense connections between the nodes within modules but sparse connections between nodes. Communities are made by this cuts which maximize the modularity of the network, which then partitions the network into distinct subnetworks. There are a few different optimization algorithms that try to maximize the network's modularity: fast greedy optimization, full optimization (slow), and hybrid methods like Louvian (popular). Overall, these methods choke on larger networks and suffer from resolution limits -- maximizing modularity is potentially slow while not necessarily being a good approach. 
+
+- **Leading Eigenvector** is another modularity based algorithm that works by calculating the eigenvector of the [modularity matrix](https://en.wikipedia.org/wiki/Modularity_\(networks\)#Matrix_formulation) for the largest positive eigenvalue and then separating nodes into separate communities based on the sign of the corresponding element in the eigenvector. If all elements in the eigenvector are of the same sign then we conclude that the network has no underlying community structure.
+
+- **Label Propagation** labels each node with unique labels and then updating the labels by majority voting in the neighborhood of the node. Densely connected nodes will form a consensus label and thus represent a community.
+
+- **InfoMap** uses mathematics similar to PageRank to estimate the interconnectedness of a graph. This algorithm imagines a random walk on the graph (with teleportation), and seeks to minimize the expected descriptive length of that walk -- by identifying communities, describing the walk takes fewer terms. This algorithm can also return the number of bits necessary to describe the network, a criminally underused value for comparing networks in paleobiology -- see [Sidor et al PNAS 2013](http://www.pnas.org/content/110/20/8129) for an example usage.  
+  I encourage you check out [http://www.mapequation.org/](http://www.mapequation.org/) for more information. Also, this is the only algorithm discussed here that is defined to work on bipartite graphs (this is not well known). 
+
+- **Walktrap** is similar to InfoMap in that it envisions a random walker on the graph. Short random walks tend to stay in the same community of a graph. The major conceptual difference between Walktrap and InfoMap is that Walktraop algorithm does not allow the random walker to teleport, so it can get stuck.
+
+
+There are many more -- tidygraph uses the common predicate `group_*`, so I encourage you to check out some of the other options. In general, I use the InfoMap algorithm -- it is defined by biogeographic networks and has better properties and performance compared to nearly every other algorithm.
+
+
+Let's see how many communities are identified in our Canidae data. We have three graphs we could analyze: the bipartite genus-formation graph, the one-mode genus-genus co-occurrence graph, and the one-mode formation-formation co-occurrence graph. Community detection on the bipartite graph will identify groups genus-formation pairs that commonly occur, while community detection on the one-way graphs will only identify genera or formations with similar occurrence patterns.
+```{r}
+graph_code <- cluster_infomap(canidae_graph)$codelength
+
+# community detection on bipartite genus-formation network
+canidae_graph %>%
+  activate(nodes) %>%                  # node properties
+  mutate(group = as.factor(group_infomap())) %>%
+  ggraph(layout = 'bipartite') +
+  geom_edge_link() +
+  geom_node_point(aes(colour = group),
+                  size = 5) +
+  geom_node_text(aes(label = name), 
+                 repel = TRUE) +
+  theme_graph() +
+  scale_colour_discrete(name = 'Membership') +
+  labs(subtitle = paste0('Code length = ', round(graph_code, digits = 2)))
+
+# community detection on genus-genus co-occurrence network
+genus_code <- cluster_infomap(canidae_graph_proj$proj1)$codelength
+
+canidae_graph_proj$proj1 %>%
+  activate(nodes) %>%                  # node properties
+  mutate(group = as.factor(group_infomap())) %>%
+  ggraph() +
+  geom_edge_link() +
+  geom_node_point(aes(colour = group),
+                  size = 5) +
+  geom_node_text(aes(label = name), 
+                 repel = TRUE) +
+  theme_graph() +
+  scale_colour_discrete(name = 'Membership') +
+  labs(subtitle = paste0('Code length = ', round(genus_code, digits = 2)))
+
+# community detection on formation-formation co-occurrence network
+formation_code <- cluster_infomap(canidae_graph_proj$proj2)$codelength
+
+canidae_graph_proj$proj2 %>%
+  activate(nodes) %>%                  # node properties
+  mutate(group = as.factor(group_infomap())) %>%
+  ggraph() +
+  geom_edge_link() +
+  geom_node_point(aes(colour = group),
+                  size = 5) +
+  geom_node_text(aes(label = name), 
+                 repel = TRUE) +
+  theme_graph() +
+  scale_colour_discrete(name = 'Membership') +
+  labs(subtitle = paste0('Code length = ', round(formation_code, digits = 2)))
+```
 
 
 
 
-
-# Random graphs
+# Appendix on random graphs
 
 Sometimes we want to generate a random graph instead of writing one out by hand -- it certainly makes writing examples easier! There are many ways to generate random graphs. `tidygraph` defines four types of "games," or ways to generate random graphs: component, evolution, sampling, and type. Here we will briefly discuss one example of each of these game types. None of these approaches are necessarily better than the others, but each can be very useful for many reasons. After all, truth only exists in simulation.
 
