@@ -26,8 +26,10 @@ This tutorial/primer is inspired and based on material presented in [this blog p
 `igraph` began development well before the tidyverse, so it does not natively support a lot of the grammar we might be used to. The packages `tidygraph` and `ggraph` fill-in this missing functionality. 
 
 ```{r message = F, results = 'hide'}
-library(tidyverse)
+library(magrittr)
 library(viridis)                       # good continuous color palette
+library(tidyverse)
+
 library(igraph)
 library(ggraph)
 library(tidygraph)
@@ -59,10 +61,8 @@ node_list <- tibble(id = 1:4)          # name the nodes
 
 g1 <- tbl_graph(nodes = node_list, 
                 edges = edge_list, 
-                directed = FALSE)
-
-# what does this object *look* like?
-print(g1)
+                directed = FALSE) %T>%
+  print()                            # what does this object *look* like?
 
 ggraph(g1) + 
   geom_edge_link() +
@@ -83,9 +83,6 @@ adjm <- matrix(c(0, 1, 0, 1,
                  0, 1, 0, 0,
                  1, 1, 0, 0),          # symmetrical
                ncol = 4)
-
-# what does an adjacency matrix *look* like?
-print(adjm)
 
 as_tbl_graph(adjm, directed = FALSE) %>%
   ggraph(.) +
@@ -129,6 +126,26 @@ as_tbl_graph(adjm2, directed = FALSE) %>%
   theme_graph() 
 ```
 
+Additionally, some graphs are considered directed. Edges in a directed graph have a direction linking one node to another, but the reverse is not guaranteed. Twitter follows are directed edges -- you follow someone, but they don't necessarily follow you. Our previous graphs were all undirected, which is more akin to a Facebook friend -- your friendship is shared and not one-sided.
+
+Let's make an example directed graph. 
+```{r}
+# random adjacency matrix
+adjm_dir <- matrix(c(0, 0, 0, 0,
+                     1, 0, 0, 0,
+                     0, 1, 0, 0,
+                     1, 1, 0, 0),      # asymmetrical
+                   ncol = 4)
+
+as_tbl_graph(adjm_dir, directed = TRUE) %>%
+  ggraph(.) +
+  geom_edge_link(arrow = arrow(),
+                 start_cap = circle(3, 'mm'),
+                 end_cap = circle(3, 'mm')) +
+  geom_node_point(size = 5) +
+  theme_graph()
+```
+
 
 ## Bipartite graphs
 
@@ -150,10 +167,8 @@ g3 <- make_bipartite_graph(types = c(0, 0, 0, 1, 1),  # node membership
                                      1, 5,
                                      2, 5,
                                      3, 5)) %>% # each line is an edge
-  as_tbl_graph()
-
-# what does this object *look* like?
-print(g3)
+  as_tbl_graph() %T>%
+  print()                              # what does this object *look* like?
 
 ggraph(g3, layout = 'bipartite') +
   geom_edge_link() +
@@ -168,9 +183,8 @@ A bipartite network can also be called two-mode graph because it can be projecte
 First, draw out what you think the two one-mode projections look like. Then compare with this code snippet.
 ```{r}
 g3_proj <- bipartite_projection(g3) %>%
-  map(., ~ as_tbl_graph(.x, directed = FALSE))
-
-print(g3_proj)
+  map(., ~ as_tbl_graph(.x, directed = FALSE)) %T>%
+  print()
 
 # first projection
 ggraph(g3_proj$proj1) +
@@ -201,7 +215,7 @@ url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=
 
 canidae <- read_csv(file = url) %>%
   filter(!is.na(formation),            # need formation information
-         !str_detect(formation, '[:punct:]')) %>% # get rid of ambiguity
+         !str_detect(formation, '[:punct:]')) %>% # get rid of ambiguous entries
   mutate(formation = str_to_title(formation)) # consistency
 
 # make a taxon-locality graph
@@ -213,10 +227,8 @@ canidae_graph <- canidae %>%
   activate(nodes) %>%                  # focus on node properties
   mutate(type = bipartite_mapping(.)$type, # place in a partition
          type_name = case_when(type == TRUE ~ 'Formation',
-                               type == FALSE ~ 'Genus'))
-
-# look at this graph object
-print(canidae_graph)
+                               type == FALSE ~ 'Genus')) %T>%
+  print()                              # look at this graph object
 
 # visualize the bipartite graph
 ggraph(canidae_graph, layout = 'bipartite') + # there is no *best* layout
@@ -235,10 +247,12 @@ When we make these one-mode projections edge weights are calculated as the edge 
 ```{r}
 # decompose into the one-mode networks for co-occurrence 
 canidae_graph_proj <- bipartite_projection(canidae_graph) %>%
-  map(., ~ as_tbl_graph(.x, directed = FALSE))
+  map(., ~ as_tbl_graph(.x, directed = FALSE)) %T>%
+  print()                             # look at this new object
+```
 
-# look at this new object
-print(canidae_graph_proj)
+We can then visualize each of the one-mode networks.
+```{r}
 
 # genus co-occurrence network
 ggraph(canidae_graph_proj$proj1) +
@@ -262,17 +276,89 @@ ggraph(canidae_graph_proj$proj2) +
 
 
 
-# Describing a graph
+# Describing and analyzing a graph
 
 Now that we've made our graph, what do we do with it? What properties of our graph might be interesting? 
 
+## Whole graph
 
-## Centrality
+There are a lot of ways to summarize properties of our graph. I'm presenting a few here, but these are by no means exhaustive. Also, a lot of these measures are not explicitly defined for bipartite graphs, so while me might get values out the other end they might not mean exactly what we had in mind.
+
+- **Edge density** is the number of edges in the network divided by the number of edges that *could* be in the network (e.g. the complete network). 
+
+```{r}
+edge_density(canidae_graph_proj$proj1)
+```
+
+- **Diameter** is the longest distance between two nodes on the graph. Functions can return the distance in number of nodes or the path itself.
+
+```{r}
+# diameter length
+diameter(canidae_graph_proj$proj1)
+
+# diameter path
+get_diameter(canidae_graph_proj$proj1)
+```
+
+- **Degree distribution** is the distribution of the number of edges associated with each node. Specifically, it is the relatively frequency of nodes with that number of verticies. The first value corresponds to nodes with 0 edges, the second to nodes with 1 edge, etc.
+
+```{r}
+dd <- degree_distribution(canidae_graph_proj$proj1)
+ggplot(data = tibble(x = seq(from = 0,
+                             to = length(dd) - 1),
+                     y = dd),
+       mapping = aes(x = x, y = y)) +
+  geom_point() +
+  geom_line() +
+  labs(x = 'Degree',
+       y = 'Percentage of nodes with that degree') +
+  scale_x_continuous(breaks = seq(from = 0,
+                                  to = length(dd) - 1,
+                                  by = 2)) +
+  theme_minimal()
+```
+
+- **Biogeographic connectedness** ($BC$) is a measure invented for the [analysis of biogeographic networks](http://www.pnas.org/content/110/20/8129). $BC$ is written
+  $$
+  BC = \frac{O - N}{LN - N}
+  $$
+  where $O$ is the number of edges in the occurrence network (i.e. number of occurrences), $N$ is the number of taxa, and $L$ is the number of localities. The numerator is the number of occurrences beyond a single locality, and the denominator is the number of possible occurrences ($LN$) minus one occurrence for each species because each species must occur at least once. $BC$ varies between 0 and 1 which correspond to minimum and maximum homogeneity, respectively. Networks with high degree of endemicity have values closer to 0, which networks with more cosmopolitan fauna have values closer to 1.
+
+```{r}
+# Biogeographic connectedness
+biogeo_connect <- function(g) {
+  if(!is_bipartite(g)) {
+    return(paste('graph object must be bipartite.'))
+  }
+
+  oo <- ecount(g)
+  bp <- bipartite_mapping(g)$type      
+  nn <- sum(bp == FALSE)               # assume the false nodes are taxa
+  ll <- sum(bp == TRUE)                # assume the true nodes are localities
+
+  bc <- (oo - nn) / (ll * nn - nn)
+  bc
+}
+
+biogeo_connect(canidae_graph)
+```
+
+- **Code length** is a derived measure from the InfoMap community detection algorithm, which we will discuss below. This algorithm imagines a random walk on the graph that can teleportation at random intervals. This algorithm seeks to minimize the expected descriptive length of that walk -- by identifying communities, describing the graph as a binary code takes fewer bits. Importantly, this summary statistic is valid for any graph, including bipartite ones.  
+  This algorithm also returns the number of bits necessary to describe the network, a criminally underused value for comparing networks in paleobiology -- see [Sidor et al PNAS 2013](http://www.pnas.org/content/110/20/8129) for an example usage. The shorter the code length, the simpler the graph.  
+  I encourage you check out [http://www.mapequation.org/](http://www.mapequation.org/) for more information.
+
+```{r}
+cluster_infomap(canidae_graph)$codelength # summary stat
+```
+
+
+
+## Nodes and centrality
 
 The major category of summary statistics are centrality measures -- how close is each node to the "center" of the graph? There are many different kinds of centrality measures, each with their own logic. A famous example is the PageRank algorithm which is the core of the Google search engine. All centrality measures are properties of the nodes. 
 Here is a very brief introduction to five different centrality measures. 
 
-- **Degree centrality** is the number of edges associated with that node. The degree distribution is a common focus of statistical analysis.
+- **Degree centrality** is the number of edges associated with that node. 
 
 - **Closeness** is the inverse of the average length of the shortest path between that node and all other nodes.
 
@@ -280,13 +366,13 @@ Here is a very brief introduction to five different centrality measures.
 
 - **Betweenness** is roughly defined as the number of shortest paths that path through that node -- how central is that node for getting from one node to another.
 
-- **PageRank** follows the logic that important nodes are connected to other important nodes.
+- **PageRank** follows the logic that important nodes are connected to other important nodes. This is the algorithm at the core of Google's search engine -- important websites frequently link to and are linked by other important websites. Conceptually, this algorithm envisions a random web surfer, which moves around the network but occasionally teleports (e.g. hits the home button) and starts walking from a completely different part of the network.
 
 There are many more -- tidygraph uses the common predicate `centrality_*`, so I encourage you to check out some of the other options.
 
 Most centrality measures are not properly defined for bipartite networks as they assume all nodes belong to the same set. This does not mean these function calls will fail, just that the answer might not be what we expect. 
 
-Let's apply these centrality measures to our genus-genus co-occurrence network.
+Let's apply these centrality measures to one-way projections. `centrality_*` functions help us add features to our graphs which we can use to help visualize important parts of our graphs.
 ```{r}
 canidae_graph_proj$proj1 %>%
   activate(nodes) %>%                  # focus on the nodes
@@ -299,6 +385,25 @@ canidae_graph_proj$proj1 %>%
   theme_graph() +
   scale_colour_viridis()
 
+canidae_graph_proj$proj2 %>%
+  activate(nodes) %>%                  # focus on the nodes
+  mutate(degree = centrality_degree(),
+         pagerank = centrality_pagerank()) %>%
+  ggraph() +
+  geom_edge_link() +
+  geom_node_point(aes(size = degree,
+                      colour = pagerank)) +
+  theme_graph() +
+  scale_colour_viridis()
+```
+
+If we are just interested in the network summaries, we need to use the basic `igraph` functions -- `tidygraph` objects are not compatible with `dplyr::summary(...)`.
+```{r eval=FALSE}
+degree(canidae_graph_proj$proj1)
+page_rank(canidae_graph_proj$proj1)
+
+degree(canidae_graph_proj$proj2)
+page_rank(canidae_graph_proj$proj2)
 ```
 
 
@@ -306,30 +411,30 @@ canidae_graph_proj$proj1 %>%
 
 A common desire in paleobiological analysis of graphs is estimating the presence of [distinct communities](https://en.wikipedia.org/wiki/Community_structure) -- two or more groups of nodes that are more highly connected within each group than between the groups. For example, [Muscente et al. PNAS 2018](http://www.pnas.org/content/115/20/5217) is mostly just community detection applied to a taxon-taxon co-occurrence graph.
 
-Community detection algorithms are complicated and highly varied. There are many community detection algorithms which take many different approaches to breaking up the network. 
+There are many community detection algorithms which take many different approaches to breaking up the network. Community detection algorithms are also complicated and highly varied. Some algoritms take into account edge weights or directed edges, but many do not. **Always read the documentation!** It is your job to make sure a method is appropriate for your network.
 
-Here is a brief introduction to a few commonly used algorithms:
+Here is a brief introduction to a few commonly used techniques.
 
 - **Clustering** algorithms like the well-known standard *hierarchical clustering* can be applied to networks.
 
 - **Modularity** based methods. Modularity is the "strength" of division in a network. The modularity of a network is the fraction of edges that fall within a group minus the expected fraction if edges were assigned randomly. High modularity means there dense connections between the nodes within modules but sparse connections between nodes. Communities are made by this cuts which maximize the modularity of the network, which then partitions the network into distinct subnetworks. There are a few different optimization algorithms that try to maximize the network's modularity: fast greedy optimization, full optimization (slow), and hybrid methods like Louvian (popular). Overall, these methods choke on larger networks and suffer from resolution limits -- maximizing modularity is potentially slow while not necessarily being a good approach. 
 
-- **Leading Eigenvector** is another modularity based algorithm that works by calculating the eigenvector of the [modularity matrix](https://en.wikipedia.org/wiki/Modularity_\(networks\)#Matrix_formulation) for the largest positive eigenvalue and then separating nodes into separate communities based on the sign of the corresponding element in the eigenvector. If all elements in the eigenvector are of the same sign then we conclude that the network has no underlying community structure.
+    * **Leading Eigenvector** is another modularity based algorithm that works by calculating the eigenvector of the [modularity matrix](https://en.wikipedia.org/wiki/Modularity_\(networks\)#Matrix_formulation) for the largest positive eigenvalue and then separating nodes into separate communities based on the sign of the corresponding element in the eigenvector. If all elements in the eigenvector are of the same sign then we conclude that the network has no underlying community structure.
 
 - **Label Propagation** labels each node with unique labels and then updating the labels by majority voting in the neighborhood of the node. Densely connected nodes will form a consensus label and thus represent a community.
 
-- **InfoMap** uses mathematics similar to PageRank to estimate the interconnectedness of a graph. This algorithm imagines a random walk on the graph (with teleportation), and seeks to minimize the expected descriptive length of that walk -- by identifying communities, describing the walk takes fewer terms. This algorithm can also return the number of bits necessary to describe the network, a criminally underused value for comparing networks in paleobiology -- see [Sidor et al PNAS 2013](http://www.pnas.org/content/110/20/8129) for an example usage.  
-  I encourage you check out [http://www.mapequation.org/](http://www.mapequation.org/) for more information. Also, this is the only algorithm discussed here that is defined to work on bipartite graphs (this is not well known). 
+- **Walktrap** is similar to InfoMap in that it envisions a random walker on the graph. Short random walks tend to stay in the same community of a graph. 
 
-- **Walktrap** is similar to InfoMap in that it envisions a random walker on the graph. Short random walks tend to stay in the same community of a graph. The major conceptual difference between Walktrap and InfoMap is that Walktraop algorithm does not allow the random walker to teleport, so it can get stuck.
+- **InfoMap** is like Walktrap plus PageRank. I briefly introduced this algorithm when discussing the code length total graph summary statistic, so this is moslty a repeat of that earlier information.  
+  This algorithm imagines a random walk on the graph that can teleportation at random intervals (the same thing as the "random web surfer" from PageRank.) This algorithm seeks to minimize the expected descriptive length of that walk -- by identifying communities, describing the graph as a binary code takes fewer bits. Also, this is the only algorithm discussed here that is defined to work on bipartite graphs (this is not well known).  
+  This algorithm also returns the number of bits necessary to describe the network, a criminally underused value for comparing networks in paleobiology -- see [Sidor et al PNAS 2013](http://www.pnas.org/content/110/20/8129) for an example usage. The shorter the code length, the simpler the graph.  
+  I encourage you check out [http://www.mapequation.org/](http://www.mapequation.org/) for more information. 
 
+There are many more -- tidygraph uses the common predicate `group_*`, so I encourage you to check out some of the other options. In general, I use the InfoMap algorithm -- it is defined by biogeographic networks and has better properties and performance compared to nearly every other algorithm. As with the `centrality_*` family of functions, the `group_*` family also gives use features for each of the nodes. These features can help us color or shape our nodes by their community memberships. Additionally, the `cluster_*` family of functions in the `igraph` library are useful when we want to observe network summaries directly.
 
-There are many more -- tidygraph uses the common predicate `group_*`, so I encourage you to check out some of the other options. In general, I use the InfoMap algorithm -- it is defined by biogeographic networks and has better properties and performance compared to nearly every other algorithm.
-
-
-Let's see how many communities are identified in our Canidae data. We have three graphs we could analyze: the bipartite genus-formation graph, the one-mode genus-genus co-occurrence graph, and the one-mode formation-formation co-occurrence graph. Community detection on the bipartite graph will identify groups genus-formation pairs that commonly occur, while community detection on the one-way graphs will only identify genera or formations with similar occurrence patterns.
+Let's see how many communities are identified in our Canidae data. We have three graphs we could analyze: the bipartite genus-formation graph, the one-mode genus-genus co-occurrence graph, and the one-mode formation-formation co-occurrence graph. Community detection on the bipartite graph will identify groups genus-formation pairs that commonly occur, while community detection on the one-way graphs will only identify genera or formations with similar occurrence patterns. I'm only going to be using the InfoMap algorithm, but feel free to try others.
 ```{r}
-graph_code <- cluster_infomap(canidae_graph)$codelength
+graph_code <- cluster_infomap(canidae_graph)$codelength # summary stat
 
 # community detection on bipartite genus-formation network
 canidae_graph %>%
@@ -399,7 +504,8 @@ play_erdos_renyi(n = 100,              # nodes
                  p = 0.1) %>%          # probability of edge occurring
   ggraph(.) +
   geom_edge_link() +
-  geom_node_point(size = 5) +
+  geom_node_point(size = 3,
+                  colour = 'blue') +
   theme_graph()
 ```
 
@@ -423,7 +529,8 @@ play_barabasi_albert(n = 100,          # number of nodes
                      growth = 1) %>%   # default = 1
   ggraph(.) +
   geom_edge_link() +
-  geom_node_point(size = 5) +
+  geom_node_point(size = 3,
+                  colour = 'blue') +
   theme_graph()
 ```
 
@@ -440,8 +547,9 @@ play_bipartite(n1 = 30,                # nodes in "top" part
   ggraph(., layout = 'bipartite') +
   geom_edge_link() +
   geom_node_point(aes(colour = type),
-                  size = 5) +
-  theme_graph()
+                  size = 3) +
+  theme_graph() +
+  scale_colour_manual(values = c('goldenrod', 'skyblue'))
 ```
 
 
@@ -461,7 +569,8 @@ play_blocks(n = 100,                   # how many nodes
             p_between = pref_matrix) %>% # connectedness probability matrix
   ggraph(.) +
   geom_edge_link() +
-  geom_node_point(size = 5) +
+  geom_node_point(size = 3, 
+                  colour = 'blue') +
   theme_graph()
 ```
 
