@@ -484,6 +484,11 @@ canidae_graph_proj$proj2 %>%
 ```
 
 
+# Summary
+
+In this lesson we covered the basic definition of a graph/network as mathematical construct made of nodes and edges. This definition includes concepts like directed versus undirected edges and weighted edges. The basics of creating graphs from edge lists or adjacency matrices was covered as a prelude to processing PBDB data into a biogeographical network. We also introduced a special type of network called a bipartite network. We also were introduced to a variety of ways and perspectives of summarizing a network -- these included whole graph summaries, node and centrality properties, and community detection. 
+
+
 
 
 # Appendix on random graphs
