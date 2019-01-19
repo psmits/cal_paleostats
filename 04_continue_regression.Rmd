@@ -1,0 +1,47 @@
+---
+title: "Going Beyond Simple Regression Models"
+output: 
+  html_document: 
+    toc: true 
+    toc_depth: 2
+---
+
+
+# Objectives
+
+- Interpret effects of multiple predictors in a regression.
+- Interpret predictor interactions with both discrete and continuous covariates.
+- Visualize interaction effects.
+
+
+```{r message = F, results = 'hide'}
+library(tidyverse)
+library(brms)
+library(tidybayes)
+
+theme_set(theme_bw())
+```
+
+
+# Adding predictors to your regression model
+
+# Interactions
+
+## Discrete and Discrete
+
+nexted ANOVA lol
+
+### Visualize
+
+## Continuous and Discrete
+
+ANCOVA lol
+
+### Visualize
+
+## Continuous and Continuous
+
+### Visualize
+
+# Summary
+

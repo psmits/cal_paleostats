@@ -21,7 +21,7 @@ This tutorial/primer is inspired and based on material presented in [this blog p
 
 # `igraph`
 
-`igraph` is a large library of graph theory related functions which is available for C, python, and R. We will be using the R package, but much of what we will cover is general in nature. Additionally, most packages that interface with igraph have joint documentation -- you'll need to understand `igraph` in order to use `tidygraph`.
+[`igraph`](https://igraph.org/) is a large library of graph theory related functions which is available for C, python, and R. We will be using the R package, but much of what we will cover is general in nature. Additionally, most packages that interface with igraph have joint [documentation](https://igraph.org/r/) -- you'll need to understand `igraph` in order to use `tidygraph`.
 
 `igraph` began development well before the tidyverse, so it does not natively support a lot of the grammar we might be used to. The packages `tidygraph` and `ggraph` fill-in this missing functionality. 
 
@@ -155,7 +155,7 @@ Here is an example bipartite graph
 $$
 \begin{align}
   U &= \{1, 2, 3\} \\
-  V &= \{3, 5\} \\
+  V &= \{4, 5\} \\
   E &= \{ \{1, 4\}, \{1, 5\}, \{2, 5\}, \{3, 5\} \}. \\
 \end{align}
 $$
@@ -210,14 +210,15 @@ A relatively recent innovation in paleobiology is the application of networks to
 
 For this exercise we will be using the Quaternary record of Canidae. Our data will be sourced directly from the Paleobiology Database. I'm using the following automatic filtering criteria: taxonomic name Canidae, interval Quaternary, identity resolved at least to genus (lumping genus and species as a single occurrence), only valid taxonomic names, and will all metadata. I've formulated this as a url so we can directly query the PBDB from our code. For more information how to to format this url call, check out the [API documentation](https://paleobiodb.org/data1.2/).
 
-```{r}
+```{r message = F, results = 'hide'}
 url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&idreso=lump_genus&taxon_status=valid&show=full'
 
 canidae <- read_csv(file = url) %>%
   filter(!is.na(formation),            # need formation information
          !str_detect(formation, '[:punct:]')) %>% # get rid of ambiguous entries
   mutate(formation = str_to_title(formation)) # consistency
-
+```
+```{r}
 # make a taxon-locality graph
 canidae_graph <- canidae %>%
   dplyr::select(accepted_name, formation) %>%
@@ -241,7 +242,7 @@ ggraph(canidae_graph, layout = 'bipartite') + # there is no *best* layout
 
 This network that we've just made and visualized is a biogeographic occurrence network which Canidae genera appear in various geological formations. 
 
-As demonstrated earlier, the bipartite network encodes a lot of information including both one-mode projections which describe genus-genus co-occurrence where edges represent occuring in the same formation, and formation-formation co-occurrence where edges represent genera occurring in both formations.
+As demonstrated earlier, the bipartite network encodes a lot of information including both one-mode projections which describe genus-genus co-occurrence where edges represent occurring in the same formation, and formation-formation co-occurrence where edges represent genera occurring in both formations.
 
 When we make these one-mode projections edge weights are calculated as the edge multiplicity. This means that, for example, if Location A and Location B share Species 1 and Species 2, the edge connecting Locations A and B has weight 2.
 ```{r}
@@ -300,7 +301,7 @@ diameter(canidae_graph_proj$proj1)
 get_diameter(canidae_graph_proj$proj1)
 ```
 
-- **Degree distribution** is the distribution of the number of edges associated with each node. Specifically, it is the relatively frequency of nodes with that number of verticies. The first value corresponds to nodes with 0 edges, the second to nodes with 1 edge, etc.
+- **Degree distribution** is the distribution of the number of edges associated with each node. Specifically, it is the relatively frequency of nodes with that number of vertices. The first value corresponds to nodes with 0 edges, the second to nodes with 1 edge, etc.
 
 ```{r}
 dd <- degree_distribution(canidae_graph_proj$proj1)
@@ -331,7 +332,7 @@ biogeo_connect <- function(g) {
     return(paste('graph object must be bipartite.'))
   }
 
-  oo <- ecount(g)
+  oo <- gsize(g)
   bp <- bipartite_mapping(g)$type      
   nn <- sum(bp == FALSE)               # assume the false nodes are taxa
   ll <- sum(bp == TRUE)                # assume the true nodes are localities
@@ -411,7 +412,7 @@ page_rank(canidae_graph_proj$proj2)
 
 A common desire in paleobiological analysis of graphs is estimating the presence of [distinct communities](https://en.wikipedia.org/wiki/Community_structure) -- two or more groups of nodes that are more highly connected within each group than between the groups. For example, [Muscente et al. PNAS 2018](http://www.pnas.org/content/115/20/5217) is mostly just community detection applied to a taxon-taxon co-occurrence graph.
 
-There are many community detection algorithms which take many different approaches to breaking up the network. Community detection algorithms are also complicated and highly varied. Some algoritms take into account edge weights or directed edges, but many do not. **Always read the documentation!** It is your job to make sure a method is appropriate for your network.
+There are many community detection algorithms which take many different approaches to breaking up the network. Community detection algorithms are also complicated and highly varied. Some algorithms take into account edge weights or directed edges, but many do not. **Always read the documentation!** It is your job to make sure a method is appropriate for your network.
 
 Here is a brief introduction to a few commonly used techniques.
 
