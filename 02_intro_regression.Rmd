@@ -20,6 +20,7 @@ library(tidyverse)
 library(modelr)
 library(brms)
 library(tidybayes)
+library(here)
 
 theme_set(theme_bw())
 ```
@@ -68,7 +69,7 @@ The dataset we're going to have fun with as part of today's activities is the Bi
 
 
 ```{r}
-r <- read_tsv('./payne_bodysize/Occurrence_PaleoDB.txt') # grabbing from subdirectory
+r <- read_tsv(here('payne_bodysize', 'Occurrence_PaleoDB.txt')) # grabbing from subdirectory
 
 # modify raw data for use
 # genus can occur 1+ times

@@ -15,10 +15,15 @@ output:
 - Visualize interaction effects.
 
 
-```{r message = F, results = 'hide'}
+```{r load_packages, message = F, results = 'hide'}
+library(knitr)
+library(kableExtra)
+
 library(tidyverse)
 library(brms)
 library(tidybayes)
+library(here)
+library(janitor)
 
 theme_set(theme_bw())
 ```
@@ -30,9 +35,72 @@ In out last lesson on regression we focused on linear regression with a single b
 
 The first part of this lesson is devoted to introducing continuous predictors. Example continuous variables include measures such as height, wing length, beak depth, or shell volume.
 
-## Starting with a basic model
 
 
+## Starting with a basic problem
+
+In our previous lesson on regression we compared valve sizes of Brachiopods and Bivalves. In this exercise we will be analyzing how valve size varies with global temperature. This temperature information is also from the [Payne et al. 2014 ProcB](http://rspb.royalsocietypublishing.org/content/281/1783/20133122.long) paper and is present in a second file. The temperature data is defined for every 0.25 million years from approximately 521 million years ago to the present. 
+
+
+First let's bring in the data, start to organize it, and take a look at what we're dealing with.
+
+```{r read_data}
+
+```
+
+Our next goal is to combine these two tibbles so we can analyze it. `dplyr` tools make it very easy to combine these data sources based on when they occur, we just need to make sure that our dates "line up." But we have a bit of an issue -- our taxon ages do not match our temperature estimates. A common practice in paleobiology is to coarsen our temporal resolution and then bin the data points. Lucky for me, this is such a common procedure that I wrote a function that coarsens temporal resolution given a vector of ages.
+
+```{r bin_function}
+
+#' Break time data up into bins
+#' 
+#' Have fun with this. basic rules. greater than equal to base, less than top.
+#' 
+#' @param x vector of ages
+#' @param by bin width
+#' @return vector of bin memberships
+#' @author Peter D Smits <peterdavidsmits@gmail.com>
+bin_time <- function(x, by = NULL, number = NULL) {
+
+  if(is.null(by) & is.null(number)) {
+    return('no scheme given. specify either bin width or number of bins.')
+  }
+
+  if(!is.null(by) & !is.null(number)) {
+    return('too much information. specify either bin width OR number of bins, not both.')
+  }
+
+  top <- ceiling(max(x))
+  bot <- floor(min(x))
+
+  if(!is.null(by)) {
+    unt <- seq(from = bot, to = top, by = by)
+  } else if(!is.null(number)) {
+    unt <- seq(from = bot, to = top, length.out = number + 1)
+  }
+
+  unt1 <- unt[-length(unt)]
+  unt2 <- unt[-1]
+  uu <- map2(unt1, unt2, ~ which(between(x, left = .x, right = .y)))
+
+  y <- x
+  for(ii in seq(length(uu))) {
+    y[uu[[ii]]] <- ii
+  }
+  y 
+}
+
+```
+
+This function, `bin_time`, requires two of three possible arguments: a vector of ages and either the width of the bin or the number of expected bins. In this case let's see what happens when bin the data every XX million years. We can then combine the data using a "left join" -- this is where all records from one tibble are matched to the records of a second tibble. The result is NULL from the second tibble if there is no match in the first tibble. The temporal bins are the perfect 
+
+```{r join_data}
+```
+
+That seems to have done the trick. Now let's take a look at the data.
+
+```{r vis_data}
+```
 
 
 ## Centering
