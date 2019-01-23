@@ -1,0 +1,54 @@
+---
+title: "Processing paleo data"
+output:
+  html_document:
+    toc: true 
+    toc_depth: 2
+---
+
+
+# Objectives
+
+- Introduce the data stored in the Paleobiology Database.
+- Learn how to *programatically* download PBDB data.
+- Learn how to make PBDB cleaner and tidier
+
+
+```{r results = 'hide'}
+library(tidyverse)
+library(janitor)
+```
+
+
+# Paleobiology Database
+
+## API
+
+https://paleobiodb.org/data1.2/
+
+
+## Example calls
+
+Let's download all occurrences of the mammal family Canidae during the Quaternary. Instead of relying on PBDB tools to lump genera or limit to valid taxa, let's do this by hand so you can apply these procedures to other datasets.
+
+
+```{r}
+
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
+canidae <- read_csv(file = url)
+
+# kable a table here
+
+```
+
+
+
+# Cleaning and tidying
+
+## Variable names
+
+
+## Regex shortcuts
+
+
+## Joining tibbles
