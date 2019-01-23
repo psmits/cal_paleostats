@@ -9,6 +9,7 @@ output:
 
 # Objectives
 
+- Adding a continuous predictor
 - Interpret effects of multiple predictors in a regression.
 - Interpret predictor interactions with both discrete and continuous covariates.
 - Visualize interaction effects.
@@ -23,7 +24,59 @@ theme_set(theme_bw())
 ```
 
 
-# Adding predictors to your regression model
+# Continuous predictors
+
+In out last lesson on regression we focused on linear regression with a single binary predictor. Along the way we were introduced to a notation for clearly communicating statistical models, multiple ways of summarizing our regression model fit, and the basic differences between the linear predictor of the regression model and the posterior predictive distribution of the same model.
+
+The first part of this lesson is devoted to introducing continuous predictors. Example continuous variables include measures such as height, wing length, beak depth, or shell volume.
+
+## Starting with a basic model
+
+
+
+
+## Centering
+
+If you recall from our previous lesson, a regression coefficient is interpreted as the expected change in the outcome per unit change in the predictor. With binary, and categorical predictors in general, this is pretty straight forward -- a unit change means being of a category or not, 0 or 1, so the coefficient is the change for being of that category.
+
+There are a few difficulties that arise when interpreting a regression model with at least one continuous predictor. The first is how to interpret the model intercept. Remember, the intercept corresponds to the expected value of the outcome with ALL predictors are 0. The issue is that not all continuous predictors make sense with a value of 0. For example, a human with height 0 is not a valid value so the intercept of the regression model has not functional meaning and represents an impossible scenario, meaning that we've lost out on interpretability.
+
+The procedure of subtracting the mean of a variable from each value. The values predictors are then the **difference** between that observation and the mean of the sample.
+
+Effect: intercept corresponds to **overall** mean. 
+
+The estimated intercept is now interpreted as the expected value of the outcome, when all predictors have a value of zero.
+
+The other difficulty that arises when interpreting continuous predictors occurs when we have more than one predictor variable and has to do with the *scale* of the variables, as discussed below.
+
+
+# Model with multiple predictors
+
+Multivariate linear models are linear regression models with more than one predictor variable.
+
+Correlation is common in nature. Don't be afraid of it -- be prepared for it.
+
+Why would we want to include more than one predictor?
+
+- Statistical "control" for confounding variables. A confounding variable is one that may be correlated with another variable of interest. These confounds can hide real important variables just as easily as they can produce false ones. Simpson's Paradox is a particularly important type of confound relationship: the entire direction of an apparent association between a predictor and outcome can be reversed by considering a confound. FIGURE.
+- Multiple causation. Even when confounds are absent a phenomenon may really arise from multiple causes.
+- Interactions. Even when variables are uncorrelated, the importance of each may still depend on the other. For example, plants need light and water -- but providing only one and not the other confers no benefit to the plant. Examples of these phenomenon abound -- so effective inference about one variable will usually depend upon consideration of other variables.
+
+Two major things that multivariable models can help us with are revealing *spurious* correlations and revealing correlations that are *masked* by unrevealed correlations with other variables.
+
+## A less basic model
+
+
+## Standardizing
+
+The procedure of dividing every value of a continuous variable by the standard deviation of that variable.
+
+Effect: Regression coefficient corresponds to change in y per change in standard deviation of variable. Makes the effects of multiple predictors easier to compare and interpret together.
+
+
+
+
+
 
 # Interactions
 
