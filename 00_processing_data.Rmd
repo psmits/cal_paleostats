@@ -1,5 +1,5 @@
 ---
-title: "Processing paleo data"
+title: "Managing and processing paleo data"
 output:
   html_document:
     toc: true 
@@ -11,35 +11,85 @@ output:
 
 - Introduce the data stored in the Paleobiology Database.
 - Learn how to *programatically* download PBDB data.
+- Introduce tidy data and some good practices when managing data.
 - Learn how to make PBDB cleaner and tidier
 
 
-```{r results = 'hide'}
+```{r load_packages, results = 'hide'}
 library(tidyverse)
 library(janitor)
 ```
 
+# Reading
 
-# Paleobiology Database
+The following material are recommended pre-readings before starting this tutorial. You do not have to read all of them, just pick at least one.
+
+- [Wickham 2014 "Tidy Data"](https://www.jstatsoft.org/article/view/v059i10).
+- [Wilson *et al.* 2017 "Good enough practices in scientific computing" **PLoS Computational Biology**](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005510).
+- [Verde Arregotia *et al.* 2018 "Good practices for sharing analysis-ready data in mammalogy and biodiversity research" **Hystrix, the Italian JOurnal of Mammalogy**](http://www.italian-journal-of-mammalogy.it/Good-practices-for-sharing-analysis-ready-data-in-mammalogy-and-biodiversity-research,101564,0,2.html).
+- [Bryan "Project oriented workflow" tidyverse.org](https://www.tidyverse.org/articles/2017/12/workflow-vs-script/).
+- [Bryan "Zen and aRt of Workflow Maintenance" talk](https://speakerdeck.com/jennybc/zen-and-the-art-of-workflow-maintenance).
+- [Bryan "Code Smells and Feels" talk](https://github.com/jennybc/code-smells-and-feels#readme).
+- [Bryan 2017 "Excuse me, do you have a moment to talk about version control?" **PeerJ**](https://peerj.com/preprints/3159/).
+
+
+# Introduction
+
+Any project you work on has multiple parts: data, documentation, reports, code, etc. Managing and keeping track of these parts is not a simple task. Today we will discuss data wrangling and management using the `tidyverse` set of packages and syntax.
+
+This lesson is in three parts: getting data, processing data, and sharing data.
+
+
+
+# Getting data
+
+One of the greatest resources in paleobiology is the aptly named [Paleobiology Database](https://paleobiodb.org/), or PBDB for short. The PBDB is a freely avaliable internet repository of fossil occurrences, collections, taxonomic opinions, and lots of other information. The standard way to access information in the PBDB is through the class [Download Generator](https://paleobiodb.org/classic/displayDownloadGenerator). In the past it was very difficult to replicate previous PBDB downloads because of how difficult they were to communicate -- with so many manual options, it is hard to easily transmit this information to another author. The modern Download Generator (at time of this writing) has one major improvement for increasing the reproducibility of downloads -- a URL. Every option updates a URL that calls our data from the PBDB. Play around with the download options and see how the URL changes.
+
+That URL is a call to the [PBDB's API](https://paleobiodb.org/data1.2/), which is the data service for interfacing with the material stored in the underlying database. The API documentation leaves something to be desired, but as you interact with the docs and start writing your own API calls it should become easier.
+
+Here are a few example URLs which make calls to the PBDB API. Use the API documentation to describe the differences between the different calls.
+
+```
+
+https://paleobiodb.org/data1.2/occs/list.json?base_name=Cetacea&interval=Miocene&show=all
+
+https://paleobiodb.org/data1.2/occs/list.json?base_name=Cetacea&interval=Miocene&taxon_status=valid&show=all
+
+https://paleobiodb.org/data1.2/occs/list.txt?base_name=Cetacea&interval=Miocene&idreso=genus&show=all
+
+https://paleobiodb.org/data1.2/occs/taxa.txt?base_name=Cetacea&interval=Miocene&show=attr
+
+```
+
 
 ## API
 
+API
+
+
 https://paleobiodb.org/data1.2/
 
+We are going to focus on the most important data service: fossil occurrences.
 
-## Example calls
+## Occurrences
+
+An occurrence is the record of a single fossil -- an organism at a particular location in time and space. 
+
 
 Let's download all occurrences of the mammal family Canidae during the Quaternary. Instead of relying on PBDB tools to lump genera or limit to valid taxa, let's do this by hand so you can apply these procedures to other datasets.
 
 
-```{r}
+```{r read_data}
 
 url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
 canidae <- read_csv(file = url)
 
-# kable a table here
-
 ```
+
+The `canidae` object represents the basic PBDB list response with all information for every observation.
+
+
+
 
 
 
