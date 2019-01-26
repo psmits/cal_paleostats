@@ -18,6 +18,9 @@ output:
 ```{r load_packages, results = 'hide'}
 library(tidyverse)
 library(janitor)
+
+library(knitr)
+library(kableExtra) 
 ```
 
 # Reading
@@ -42,22 +45,17 @@ This lesson is in three parts: getting data, processing data, and sharing data.
 
 # Getting data
 
-
-
-
-
 One of the greatest resources in paleobiology is the aptly named [Paleobiology Database](https://paleobiodb.org/), or PBDB for short. The PBDB is a freely avaliable internet repository of fossil occurrences, collections, taxonomic opinions, and lots of other information. The standard way to access information in the PBDB is through the class [Download Generator](https://paleobiodb.org/classic/displayDownloadGenerator). In the past it was very difficult to replicate previous PBDB downloads because of how difficult they were to communicate -- with so many manual options, it is hard to easily transmit this information to another author. 
 
 The modern Download Generator (at time of this writing) has one major improvement for increasing the reproducibility of downloads -- a URL. Every option updates a URL that calls our data from the PBDB. Play around with the download options and see how the URL changes.
 
 That URL is a call to the [PBDB's API](https://paleobiodb.org/data1.2/), which is the data service for interfacing with the material stored in the underlying database. This means we can share the URL along with our study so that other researchers can make the same data call. The API documentation leaves something to be desired, but as you interact with the docs and start writing your own API calls, it should become easier.
 
-A fossil occurrence is the core data type of the PBDB and probably the most important data type in all of paleobiology -- the unique recording of an organism at a particular location in time and space. Normally we want a list of fossil occurrences that correspond to our study system or period of time. The various fields allow us to limit our search criteria. Of course, we can further manipulate our data using R code after making an API call -- something you need to share with your study!
+A fossil occurrence is the core data type of the PBDB and probably the most important data type in all of paleobiology -- the unique recording of an organism at a particular location in time and space. Normally we want a list of fossil occurrences that correspond to our study system or period of time. For data output from the PBDB for occurrences, each row is an observation and each column is a property of that fossil or metadata corresponding to its collection and identification.
 
-We are going to focus on downloading information about fossil occurrences. Here are a few example URLs which make calls to the PBDB API. Use the API documentation to describe the differences between the different calls.
+We are going to focus on downloading information about fossil occurrences. Here are a few example URLs which make calls to the PBDB API. Use the API documentation to discern and describe the differences between the different calls.
 
 ```
-
 https://paleobiodb.org/data1.2/occs/list.json?base_name=Cetacea&interval=Miocene&show=all
 
 https://paleobiodb.org/data1.2/occs/list.json?base_name=Cetacea&interval=Miocene&taxon_status=valid&show=all
@@ -65,32 +63,159 @@ https://paleobiodb.org/data1.2/occs/list.json?base_name=Cetacea&interval=Miocene
 https://paleobiodb.org/data1.2/occs/list.txt?base_name=Cetacea&interval=Miocene&idreso=genus&show=all
 
 https://paleobiodb.org/data1.2/occs/taxa.txt?base_name=Cetacea&interval=Miocene&show=attr
-
 ```
 
-The best part of using a URL based call is that we can embed them in our R scripts.
-
-
-```{r read_data}
+The best part of using a URL based call is that we can embed them in our R scripts. Here is a simple example:
+```{r read_data, message = FALSE, results = 'hide', warning = FALSE}
 
 url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
 canidae <- read_csv(file = url)
 
 ```
 
-The `canidae` object represents the basic PBDB list response with all information for every observation.
+The `canidae` object represents the basic PBDB list response with all information for every observation as a data.frame. Because the URL points directly to a CSV (or JSON) file, we never have to actually save a copy of our data to our local machine and it instead just lives in memory -- though you might want to download and store the data every so often (e.g. `write_csv()`). Also, by using a direct API call to the PBDB instead of relying on a downloaded file our analyses can instaly be updated when new data is added to the PBDB.
 
+I find tibbles easier to process than data.frame-s, so my scripts tend to look like this:
+```{r read_astibble, message = FALSE, results = 'hide', warning = FALSE}
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
+canidae <- read_csv(file = url) %>%
+  as_tibble()
+```
 
-
-
+If you play around with the canidae object you'll notice it has **TONS** of columns -- 118! Each of these columns records some bit of information about that fossil -- taxonomic identity, location, source, enterer, etc. You can check the [API documentation](https://paleobiodb.org/data1.2/occs/list_doc.html) for a description of each column. Frustrating many of these fields might be empty or inconsistently entered -- I'm looking at you lithology1 and environment. Additionally, a lot of our fossils might not be identified to the species or even genus level, or are not identified with confidence. This serves as an important point about the PBDB: the data isn't perfect. This means that the next step of our analysis is "cleaning" or "tidying" our data until we can actually analyze it!
 
 
 # Cleaning and tidying
 
-## Variable names
+This section focuses on using the `dplyr` package from the `tidyverse` to process our data until it is actually usable for our purposes. 
+
+Example filters we might consider
+- identified precisely -- no ambiguous or imperfect "calls"
+- identified to genus or better
+- paleocoordinates (latitude AND longitude)
+- body fossils
+- collected after a certain date
+
+We might also want to standardize the form of our column names. Capital letters, spaces, and punctuation are all really frustrating to code around. 
 
 
-## Regex shortcuts
+Luckily, these operations are very easy to do with with `dplyr` and the [`janitor`](https://github.com/sfirke/janitor) package. 
 
 
-## Joining tibbles
+
+For example, let's filter out the imprecise fossils and those not identified to at least the genus level, and have paleocoordinates. Let's also make sure all the variable names have the same logic (they are all already fine, but this is a good habit to get into!)
+
+```{r filter}
+canidae_filter <- 
+  canidae %>%
+  janitor::clean_names() %>%
+  filter(accepted_rank %in% c('genus', 'species'), # either is good
+         !is.na(paleolng),
+         !is.na(paleolat))
+
+```
+
+This new tibble, `canidae_filter`, is a subset of the ordinal data that should follow the rules we've laid out in the URL-based API call and the few lines of R code. If we gave this document to someone else, they could reproduce our dataset.
+
+The accepted_* variables in PBDB data correspond to the accepted, or best, identification of a fossil. Differences between identified_* and accepted_* variables are commonly due to re-identification or changes in taxonomy. While this is really convenient on its face, sometimes the accepted species names assumes too much confidence in the identification. For example, let's take a close look at a few records.
+
+```{r species_names}
+
+canidae_table <- 
+  canidae_filter %>%
+  select(identified_name, 
+         identified_rank, 
+         accepted_name, 
+         accepted_rank) %>%
+  slice(1:10)
+
+knitr::kable(canidae_table) %>%
+  kableExtra::kable_styling()
+
+```
+
+In most cases there is very good correspondence between the identified name and the accepted name, but not always. For example, the eighth line of this table corresponds to a fossil identified as "Canis cf. edwardii" but is given the accepted name of "Canis edwardii" -- this identification is arguably overconfident! But does it matter? That's up to you and your research, but let's assume it does for now. How do we resolve this and downgrade these overconfident identifications?
+
+The simplest way might be to downgrade any identified names that include punctuation and non-character symbols to just there genus. After all, "cf.", "sp." and "n. sp." all involve punctuation, and sometimes fossils have complex identifications like "cf. Dusicyon (Lycalopex) sp." which is just a nightmare. The complication comes with the "cf." appears before the genus name -- this means the genus identification is uncertain. Do we accept genus ids but not species? Or do we throw those out because they are effectively identified as far as the family-level? That's up to you and your research, but let's assume it does for now so that we can learn how.
+
+
+But how do we deal with text information? Turns out there is a whole special language for dealing with text: [regular expressions](https://en.wikipedia.org/wiki/Regular_expression). RegEx are sequences of characters that help us match specific patterns in text. In this example, I'm using a RegEx to identify all cases where there is punctuation present in the identified name -- I don't not care *where* the punctuation is, just that there *is* punctuation. 
+
+To do this, I'm going to be using functions from the `stringr` package which provide for easier interaction with text and regular expressions than the functions in base R. 
+
+I always spend a lot of time on Google figuring our RegEx before I use them as they are not intuitive, so don't worry too much about understanding regular expressions early on -- I'm using some special, easy to understand, forms that will be generally useful to you. 
+
+```{r correct_names}
+
+canidae_clean <- 
+  canidae_filter %>%
+  mutate(improve_name = if_else(str_detect(identified_name, 
+                                           pattern = '[[:punct:]]'), 
+                                true = genus, 
+                                false = accepted_name))
+
+canidae_clean %>%
+  select(identified_name, accepted_name, improve_name) %>%
+  slice(1:10) %>%
+  knitr::kable() %>%
+  kable_styling()
+
+```
+
+If we really wanted to be slick, we could combine all of the above into a single block.
+
+```{r full_example, message = FALSE, results = 'hide', warning = FALSE}
+
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
+canidae <- read_csv(file = url) %>%
+  as_tibble() %>%
+  clean_names() %>%
+  filter(accepted_rank %in% c('genus', 'species'), # either is good
+         !is.na(paleolng),
+         !is.na(paleolat)) %>%
+  mutate(improve_name = if_else(str_detect(identified_name, 
+                                           pattern = '[[:punct:]]'), 
+                                true = genus, 
+                                false = accepted_name))
+
+```
+
+
+
+
+# Sharing
+
+So far we have basically two data "files": the raw data output from the PBDB via our URL-based API call, and the cleaned data we've crafted with a bit of code. Both of these datasets are extremely important and should be shared with the audience.
+
+There are two ways to share the raw data associated with our study: the URL-based API call, and a spreadsheet of the downloaded information. Because the information on the PBDB updates over time, an API call made today might not yield an identical dataset. Earlier I hailed this as fantastic, which it is, but it is also limiting -- someone might not be able completely reproduce your analysis using just this information. The API call is useful for improving and expanding on previous analyses, but by itself is not enough to reproduce your analysis. You also need to share the raw data download so that your complete analysis, including filtering and cleaning, is reproducible.
+
+You probably also want to save a local copy of your filtered and cleaned dataset so you don't have to re-run your cleaning scripts all the time. It also means you can separate your cleaning from the rest of your analysis. You'll end up with multiple R scripts and multiple datasets -- that's good. 
+
+For example, my projects tend to have multiple subfolders: R/, data/, and results/. In the R directory, I'll have multiple scripts -- one for loading and cleaning data, one for visualizing this cleaned data, and at least one for analyzing the cleaned data. I save the raw data to the data/ directory, and the cleaned data and figured in the results/ directory.
+
+
+Here is a quick example of what I mean without referencing subdirectories:
+```{r eval = FALSE}
+
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
+canidae <- read_csv(file = url)
+
+canidae_clean <- 
+  canidae %>%
+  as_tibble() %>%
+  clean_names() %>%
+  filter(accepted_rank %in% c('genus', 'species'), # either is good
+         !is.na(paleolng),
+         !is.na(paleolat)) %>%
+  mutate(improve_name = if_else(str_detect(identified_name, 
+                                           pattern = '[[:punct:]]'), 
+                                true = genus, 
+                                false = accepted_name))
+
+write_csv(canidae, 'pbdb_raw.csv')
+write_csv(canidae_clean, 'pbdb_clean.csv')
+```
+
+
+
+# Summary
