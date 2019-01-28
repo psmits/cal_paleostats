@@ -36,133 +36,19 @@ In out last lesson on regression we focused on linear regression with a single b
 The first part of this lesson is devoted to introducing continuous predictors. Example continuous variables include measures such as height, wing length, beak depth, or shell volume.
 
 
-
-## Starting with a basic problem
-
-In our previous lesson on regression we compared valve sizes of Brachiopods and Bivalves. In this exercise we will be analyzing how valve size varies with global temperature. This temperature information is also from the [Payne et al. 2014 ProcB](http://rspb.royalsocietypublishing.org/content/281/1783/20133122.long) paper and is present in a second file. The temperature data is defined for every 0.25 million years from approximately 521 million years ago to the present. 
+## Our first example
 
 
-First let's bring in the data, start to organize it, and take a look at what we're dealing with.
 
-```{r read_data}
-
-```
-
-Our next goal is to combine these two tibbles so we can analyze it. `dplyr` tools make it very easy to combine these data sources based on when they occur, we just need to make sure that our dates "line up." But we have a bit of an issue -- our taxon ages do not match our temperature estimates. A common practice in paleobiology is to coarsen our temporal resolution and then bin the data points. Lucky for me, this is such a common procedure that I wrote a function that coarsens temporal resolution given a vector of ages.
-
-```{r bin_function}
-
-#' Break time data up into bins
-#' 
-#' Have fun with this. basic rules. greater than equal to base, less than top.
-#' 
-#' @param x vector of ages
-#' @param by bin width
-#' @return vector of bin memberships
-#' @author Peter D Smits <peterdavidsmits@gmail.com>
-bin_time <- function(x, by = NULL, number = NULL) {
-
-  if(is.null(by) & is.null(number)) {
-    return('no scheme given. specify either bin width or number of bins.')
-  }
-
-  if(!is.null(by) & !is.null(number)) {
-    return('too much information. specify either bin width OR number of bins, not both.')
-  }
-
-  top <- ceiling(max(x))
-  bot <- floor(min(x))
-
-  if(!is.null(by)) {
-    unt <- seq(from = bot, to = top, by = by)
-  } else if(!is.null(number)) {
-    unt <- seq(from = bot, to = top, length.out = number + 1)
-  }
-
-  unt1 <- unt[-length(unt)]
-  unt2 <- unt[-1]
-  uu <- map2(unt1, unt2, ~ which(between(x, left = .x, right = .y)))
-
-  y <- x
-  for(ii in seq(length(uu))) {
-    y[uu[[ii]]] <- ii
-  }
-  y 
-}
-
-```
-
-This function, `bin_time`, requires two of three possible arguments: a vector of ages and either the width of the bin or the number of expected bins. In this case let's see what happens when bin the data every XX million years. We can then combine the data using a "left join" -- this is where all records from one tibble are matched to the records of a second tibble. The result is NULL from the second tibble if there is no match in the first tibble. The temporal bins are the perfect 
-
-```{r join_data}
-```
-
-That seems to have done the trick. Now let's take a look at the data.
-
-```{r vis_data}
-```
 
 
 ## Centering
 
-If you recall from our previous lesson, a regression coefficient is interpreted as the expected change in the outcome per unit change in the predictor. With binary, and categorical predictors in general, this is pretty straight forward -- a unit change means being of a category or not, 0 or 1, so the coefficient is the change for being of that category.
-
-There are a few difficulties that arise when interpreting a regression model with at least one continuous predictor. The first is how to interpret the model intercept. Remember, the intercept corresponds to the expected value of the outcome with ALL predictors are 0. The issue is that not all continuous predictors make sense with a value of 0. For example, a human with height 0 is not a valid value so the intercept of the regression model has not functional meaning and represents an impossible scenario, meaning that we've lost out on interpretability.
-
-The procedure of subtracting the mean of a variable from each value. The values predictors are then the **difference** between that observation and the mean of the sample.
-
-Effect: intercept corresponds to **overall** mean. 
-
-The estimated intercept is now interpreted as the expected value of the outcome, when all predictors have a value of zero.
-
-The other difficulty that arises when interpreting continuous predictors occurs when we have more than one predictor variable and has to do with the *scale* of the variables, as discussed below.
-
-
-# Model with multiple predictors
-
-Multivariate linear models are linear regression models with more than one predictor variable.
-
-Correlation is common in nature. Don't be afraid of it -- be prepared for it.
-
-Why would we want to include more than one predictor?
-
-- Statistical "control" for confounding variables. A confounding variable is one that may be correlated with another variable of interest. These confounds can hide real important variables just as easily as they can produce false ones. Simpson's Paradox is a particularly important type of confound relationship: the entire direction of an apparent association between a predictor and outcome can be reversed by considering a confound. FIGURE.
-- Multiple causation. Even when confounds are absent a phenomenon may really arise from multiple causes.
-- Interactions. Even when variables are uncorrelated, the importance of each may still depend on the other. For example, plants need light and water -- but providing only one and not the other confers no benefit to the plant. Examples of these phenomenon abound -- so effective inference about one variable will usually depend upon consideration of other variables.
-
-Two major things that multivariable models can help us with are revealing *spurious* correlations and revealing correlations that are *masked* by unrevealed correlations with other variables.
-
-## A less basic model
-
-
-## Standardizing
-
-The procedure of dividing every value of a continuous variable by the standard deviation of that variable.
-
-Effect: Regression coefficient corresponds to change in y per change in standard deviation of variable. Makes the effects of multiple predictors easier to compare and interpret together.
 
 
 
 
+# Multiple predictors
 
 
-# Interactions
-
-## Discrete and Discrete
-
-nexted ANOVA lol
-
-### Visualize
-
-## Continuous and Discrete
-
-ANCOVA lol
-
-### Visualize
-
-## Continuous and Continuous
-
-### Visualize
-
-# Summary
-
+## Scaling
