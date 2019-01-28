@@ -193,8 +193,10 @@ $(document).ready(function () {
 <li><a href="#objectives">Objectives</a></li>
 <li><a href="#reading">Reading</a></li>
 <li><a href="#introduction">Introduction</a></li>
-<li><a href="#getting-data">Getting data</a></li>
-<li><a href="#cleaning-and-tidying">Cleaning and tidying</a></li>
+<li><a href="#getting">Getting</a></li>
+<li><a href="#processing">Processing</a><ul>
+<li><a href="#binning">Binning</a></li>
+</ul></li>
 <li><a href="#sharing">Sharing</a></li>
 <li><a href="#summary">Summary</a></li>
 </ul>
@@ -220,7 +222,7 @@ library(kableExtra) </code></pre>
 <ul>
 <li><a href="https://www.jstatsoft.org/article/view/v059i10">Wickham 2014 “Tidy Data”</a>.</li>
 <li><a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005510">Wilson <em>et al.</em> 2017 “Good enough practices in scientific computing” <strong>PLoS Computational Biology</strong></a>.</li>
-<li><a href="http://www.italian-journal-of-mammalogy.it/Good-practices-for-sharing-analysis-ready-data-in-mammalogy-and-biodiversity-research,101564,0,2.html">Verde Arregotia <em>et al.</em> 2018 “Good practices for sharing analysis-ready data in mammalogy and biodiversity research” <strong>Hystrix, the Italian JOurnal of Mammalogy</strong></a>.</li>
+<li><a href="http://www.italian-journal-of-mammalogy.it/Good-practices-for-sharing-analysis-ready-data-in-mammalogy-and-biodiversity-research,101564,0,2.html">Verde Arregotia <em>et al.</em> 2018 “Good practices for sharing analysis-ready data in mammalogy and biodiversity research” <strong>Hystrix, the Italian Journal of Mammalogy</strong></a>.</li>
 <li><a href="https://www.tidyverse.org/articles/2017/12/workflow-vs-script/">Bryan “Project oriented workflow” tidyverse.org</a>.</li>
 <li><a href="https://speakerdeck.com/jennybc/zen-and-the-art-of-workflow-maintenance">Bryan “Zen and aRt of Workflow Maintenance” talk</a>.</li>
 <li><a href="https://github.com/jennybc/code-smells-and-feels#readme">Bryan “Code Smells and Feels” talk</a>.</li>
@@ -229,12 +231,12 @@ library(kableExtra) </code></pre>
 </div>
 <div id="introduction" class="section level1">
 <h1>Introduction</h1>
-<p>Any project you work on has multiple parts: data, documentation, reports, code, etc. Managing and keeping track of these parts is not a simple task. Today we will discuss data wrangling and management using the <code>tidyverse</code> set of packages and syntax.</p>
-<p>This lesson is in three parts: getting data, processing data, and sharing data.</p>
+<p>Any project you work on as a scientist has multiple parts: data, documentation, reports, code, etc. Managing and keeping track of these parts is not a simple task. Today we will discuss a small part of this process: data wrangling and sharing using the <code>tidyverse</code> set of packages and syntax. This lesson is in three parts: getting data, processing data, and sharing data.</p>
+<p>This tutorial assumes a fair amount of familiarity with the <code>tidyverse</code>, in particular <code>dplyr</code>. For a tutorial on using <code>dplyr</code> and <code>purrr</code> I recommend - <a href="https://r4ds.had.co.nz/">R for Data Science</a> - <a href="https://dplyr.tidyverse.org/articles/dplyr.html" class="uri">https://dplyr.tidyverse.org/articles/dplyr.html</a>.</p>
 </div>
-<div id="getting-data" class="section level1">
-<h1>Getting data</h1>
-<p>One of the greatest resources in paleobiology is the aptly named <a href="https://paleobiodb.org/">Paleobiology Database</a>, or PBDB for short. The PBDB is a freely avaliable internet repository of fossil occurrences, collections, taxonomic opinions, and lots of other information. The standard way to access information in the PBDB is through the class <a href="https://paleobiodb.org/classic/displayDownloadGenerator">Download Generator</a>. In the past it was very difficult to replicate previous PBDB downloads because of how difficult they were to communicate – with so many manual options, it is hard to easily transmit this information to another author.</p>
+<div id="getting" class="section level1">
+<h1>Getting</h1>
+<p>One of the greatest resources in paleobiology is the aptly named <a href="https://paleobiodb.org/">Paleobiology Database</a>, or PBDB for short. The PBDB is a freely available internet repository of fossil occurrences, collections, taxonomic opinions, and lots of other information. The standard way to access information in the PBDB is through the class <a href="https://paleobiodb.org/classic/displayDownloadGenerator">Download Generator</a>. In the past it was very difficult to replicate previous PBDB downloads because of how difficult they were to communicate – with so many manual options, it is hard to easily transmit this information to another author.</p>
 <p>The modern Download Generator (at time of this writing) has one major improvement for increasing the reproducibility of downloads – a URL. Every option updates a URL that calls our data from the PBDB. Play around with the download options and see how the URL changes.</p>
 <p>That URL is a call to the <a href="https://paleobiodb.org/data1.2/">PBDB’s API</a>, which is the data service for interfacing with the material stored in the underlying database. This means we can share the URL along with our study so that other researchers can make the same data call. The API documentation leaves something to be desired, but as you interact with the docs and start writing your own API calls, it should become easier.</p>
 <p>A fossil occurrence is the core data type of the PBDB and probably the most important data type in all of paleobiology – the unique recording of an organism at a particular location in time and space. Normally we want a list of fossil occurrences that correspond to our study system or period of time. For data output from the PBDB for occurrences, each row is an observation and each column is a property of that fossil or metadata corresponding to its collection and identification.</p>
@@ -246,40 +248,40 @@ https://paleobiodb.org/data1.2/occs/list.json?base_name=Cetacea&amp;interval=Mio
 https://paleobiodb.org/data1.2/occs/list.txt?base_name=Cetacea&amp;interval=Miocene&amp;idreso=genus&amp;show=all
 
 https://paleobiodb.org/data1.2/occs/taxa.txt?base_name=Cetacea&amp;interval=Miocene&amp;show=attr</code></pre>
-<p>The best part of using a URL based call is that we can embed them in our R scripts. Here is a simple example:</p>
-<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&amp;interval=Quaternary&amp;show=full'
-canidae &lt;- read_csv(file = url)</code></pre>
-<p>The <code>canidae</code> object represents the basic PBDB list response with all information for every observation as a data.frame. Because the URL points directly to a CSV (or JSON) file, we never have to actually save a copy of our data to our local machine and it instead just lives in memory – though you might want to download and store the data every so often (e.g. <code>write_csv()</code>). Also, by using a direct API call to the PBDB instead of relying on a downloaded file our analyses can instaly be updated when new data is added to the PBDB.</p>
+<p>The best part of using a URL based call is that we can embed them in our R scripts. Here is a simple example (note I’m suppressing warnings here, so don’t get scared when you see a lot of them):</p>
+<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+carnivora &lt;- read_csv(file = url)</code></pre>
+<p>The <code>carnivora</code> object represents the basic PBDB list response with all information for every observation as a data.frame. Because the URL points directly to a CSV (or JSON) file, we never have to actually save a copy of our data to our local machine and it instead just lives in memory – though you might want to download and store the data every so often (e.g. <code>write_csv()</code>). Also, by using a direct API call to the PBDB instead of relying on a downloaded file our analyses can instaly be updated when new data is added to the PBDB.</p>
 <p>I find tibbles easier to process than data.frame-s, so my scripts tend to look like this:</p>
-<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&amp;interval=Quaternary&amp;show=full'
-canidae &lt;- read_csv(file = url) %&gt;%
+<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+carnivora &lt;- read_csv(file = url) %&gt;%
   as_tibble()</code></pre>
-<p>If you play around with the canidae object you’ll notice it has <strong>TONS</strong> of columns – 118! Each of these columns records some bit of information about that fossil – taxonomic identity, location, source, enterer, etc. You can check the <a href="https://paleobiodb.org/data1.2/occs/list_doc.html">API documentation</a> for a description of each column. Frustrating many of these fields might be empty or inconsistently entered – I’m looking at you lithology1 and environment. Additionally, a lot of our fossils might not be identified to the species or even genus level, or are not identified with confidence. This serves as an important point about the PBDB: the data isn’t perfect. This means that the next step of our analysis is “cleaning” or “tidying” our data until we can actually analyze it!</p>
+<p>If you play around with the carnivora object you’ll notice it has <strong>TONS</strong> of columns – 118! Each of these columns records some bit of information about that fossil – taxonomic identity, location, source, enterer, etc. You can check the <a href="https://paleobiodb.org/data1.2/occs/list_doc.html">API documentation</a> for a description of each column. Frustrating many of these fields might be empty or inconsistently entered – I’m looking at you lithology1 and environment. Additionally, a lot of our fossils might not be identified to the species or even genus level, or are not identified with confidence. This serves as an important point about the PBDB: the data isn’t perfect. This means that the next step of our analysis is “cleaning” or “tidying” our data until we can actually analyze it!</p>
 </div>
-<div id="cleaning-and-tidying" class="section level1">
-<h1>Cleaning and tidying</h1>
-<p>This section focuses on using the <code>dplyr</code> package from the <code>tidyverse</code> to process our data until it is actually usable for our purposes.</p>
+<div id="processing" class="section level1">
+<h1>Processing</h1>
+<p>This section focuses on using the <code>dplyr</code> package from the <code>tidyverse</code> to process our data until it is actually usable for our purposes. Luckily, our data is already considered “tidy” because each row is an observation and each column is a variable. This does not mean our data is ready for analysis yet. Our job as analysts is to then process and filter our data till it is ready to be analyzed. Is every observation up to snuff? Or are there errors encoded in our data?</p>
 <p>Example filters we might consider - identified precisely – no ambiguous or imperfect “calls” - identified to genus or better - paleocoordinates (latitude AND longitude) - body fossils - collected after a certain date</p>
 <p>We might also want to standardize the form of our column names. Capital letters, spaces, and punctuation are all really frustrating to code around.</p>
 <p>Luckily, these operations are very easy to do with with <code>dplyr</code> and the <a href="https://github.com/sfirke/janitor"><code>janitor</code></a> package.</p>
 <p>For example, let’s filter out the imprecise fossils and those not identified to at least the genus level, and have paleocoordinates. Let’s also make sure all the variable names have the same logic (they are all already fine, but this is a good habit to get into!)</p>
-<pre class="r"><code>canidae_filter &lt;- 
-  canidae %&gt;%
+<pre class="r"><code>carnivora_filter &lt;- 
+  carnivora %&gt;%
   janitor::clean_names() %&gt;%
   filter(accepted_rank %in% c('genus', 'species'), # either is good
          !is.na(paleolng),
          !is.na(paleolat))</code></pre>
-<p>This new tibble, <code>canidae_filter</code>, is a subset of the ordinal data that should follow the rules we’ve laid out in the URL-based API call and the few lines of R code. If we gave this document to someone else, they could reproduce our dataset.</p>
+<p>This new tibble, <code>carnivora_filter</code>, is a subset of the ordinal data that should follow the rules we’ve laid out in the URL-based API call and the few lines of R code. If we gave this document to someone else, they could reproduce our dataset.</p>
 <p>The accepted_* variables in PBDB data correspond to the accepted, or best, identification of a fossil. Differences between identified_* and accepted_* variables are commonly due to re-identification or changes in taxonomy. While this is really convenient on its face, sometimes the accepted species names assumes too much confidence in the identification. For example, let’s take a close look at a few records.</p>
-<pre class="r"><code>canidae_table &lt;- 
-  canidae_filter %&gt;%
+<pre class="r"><code>carnivora_table &lt;- 
+  carnivora_filter %&gt;%
   select(identified_name, 
          identified_rank, 
          accepted_name, 
          accepted_rank) %&gt;%
-  slice(1:10)
+  slice(50:60)
 
-knitr::kable(canidae_table) %&gt;%
+knitr::kable(carnivora_table) %&gt;%
   kableExtra::kable_styling()</code></pre>
 <table class="table" style="margin-left: auto; margin-right: auto;">
 <thead>
@@ -301,13 +303,139 @@ accepted_rank
 <tbody>
 <tr>
 <td style="text-align:left;">
-Cuon sp.
+Phlaocyon minor
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Phlaocyon minor
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Desmocyon thomsoni
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Desmocyon thomsoni
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Promartes lepidus
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Promartes lepidus
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Promartes lepidus
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Promartes lepidus
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Daphoenodon notionastes
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Daphoenodon notionastes
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Daphoenodon n. sp. notionastes
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Daphoenodon notionastes
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Phlaocyon achoros
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Phlaocyon achoros
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Cynarctoides lemur
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Cynarctoides lemur
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Cormocyon cf. copei
+</td>
+<td style="text-align:left;">
+species
+</td>
+<td style="text-align:left;">
+Cormocyon copei
+</td>
+<td style="text-align:left;">
+species
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Megalictis ? sp.
 </td>
 <td style="text-align:left;">
 genus
 </td>
 <td style="text-align:left;">
-Cuon
+Megalictis
 </td>
 <td style="text-align:left;">
 genus
@@ -315,125 +443,13 @@ genus
 </tr>
 <tr>
 <td style="text-align:left;">
-Canis latrans
+Phlaocyon ? cf. annectens
 </td>
 <td style="text-align:left;">
 species
 </td>
 <td style="text-align:left;">
-Canis latrans
-</td>
-<td style="text-align:left;">
-species
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis latrans
-</td>
-<td style="text-align:left;">
-species
-</td>
-<td style="text-align:left;">
-Canis latrans
-</td>
-<td style="text-align:left;">
-species
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis sp.
-</td>
-<td style="text-align:left;">
-genus
-</td>
-<td style="text-align:left;">
-Canis
-</td>
-<td style="text-align:left;">
-genus
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Vulpes velox
-</td>
-<td style="text-align:left;">
-species
-</td>
-<td style="text-align:left;">
-Vulpes velox
-</td>
-<td style="text-align:left;">
-species
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis edwardii
-</td>
-<td style="text-align:left;">
-species
-</td>
-<td style="text-align:left;">
-Canis edwardii
-</td>
-<td style="text-align:left;">
-species
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis latrans
-</td>
-<td style="text-align:left;">
-species
-</td>
-<td style="text-align:left;">
-Canis latrans
-</td>
-<td style="text-align:left;">
-species
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis cf. edwardii
-</td>
-<td style="text-align:left;">
-species
-</td>
-<td style="text-align:left;">
-Canis edwardii
-</td>
-<td style="text-align:left;">
-species
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis sp.
-</td>
-<td style="text-align:left;">
-genus
-</td>
-<td style="text-align:left;">
-Canis
-</td>
-<td style="text-align:left;">
-genus
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Vulpes cf. vulpes
-</td>
-<td style="text-align:left;">
-species
-</td>
-<td style="text-align:left;">
-Vulpes vulpes
+Phlaocyon annectens
 </td>
 <td style="text-align:left;">
 species
@@ -441,21 +457,21 @@ species
 </tr>
 </tbody>
 </table>
-<p>In most cases there is very good correspondence between the identified name and the accepted name, but not always. For example, the eighth line of this table corresponds to a fossil identified as “Canis cf. edwardii” but is given the accepted name of “Canis edwardii” – this identification is arguably overconfident! But does it matter? That’s up to you and your research, but let’s assume it does for now. How do we resolve this and downgrade these overconfident identifications?</p>
-<p>The simplest way might be to downgrade any identified names that include punctuation and non-character symbols to just there genus. After all, “cf.”, “sp.” and “n. sp.” all involve punctuation, and sometimes fossils have complex identifications like “cf. Dusicyon (Lycalopex) sp.” which is just a nightmare. The complication comes with the “cf.” appears before the genus name – this means the genus identification is uncertain. Do we accept genus ids but not species? Or do we throw those out because they are effectively identified as far as the family-level? That’s up to you and your research, but let’s assume it does for now so that we can learn how.</p>
+<p>In most cases there is very good correspondence between the identified name and the accepted name, but not always. For example, the ninth of this table corresponds to a fossil identified as “Cormocyon cv. copei” but is given the accepted name of “Cormocyon copei” – an identification that is arguably overconfident! But does it matter? That’s up to you and your research, but let’s assume it does for now. How do we resolve this and downgrade these overconfident identifications?</p>
+<p>The simplest way might be to downgrade any identified names that include punctuation and non-character symbols to just there genus. After all, “cf.”, “sp.” and “n. sp.” all involve punctuation.</p>
 <p>But how do we deal with text information? Turns out there is a whole special language for dealing with text: <a href="https://en.wikipedia.org/wiki/Regular_expression">regular expressions</a>. RegEx are sequences of characters that help us match specific patterns in text. In this example, I’m using a RegEx to identify all cases where there is punctuation present in the identified name – I don’t not care <em>where</em> the punctuation is, just that there <em>is</em> punctuation.</p>
 <p>To do this, I’m going to be using functions from the <code>stringr</code> package which provide for easier interaction with text and regular expressions than the functions in base R.</p>
 <p>I always spend a lot of time on Google figuring our RegEx before I use them as they are not intuitive, so don’t worry too much about understanding regular expressions early on – I’m using some special, easy to understand, forms that will be generally useful to you.</p>
-<pre class="r"><code>canidae_clean &lt;- 
-  canidae_filter %&gt;%
+<pre class="r"><code>carnivora_clean &lt;- 
+  carnivora_filter %&gt;%
   mutate(improve_name = if_else(str_detect(identified_name, 
                                            pattern = '[[:punct:]]'), 
                                 true = genus, 
                                 false = accepted_name))
 
-canidae_clean %&gt;%
+carnivora_clean %&gt;%
   select(identified_name, accepted_name, improve_name) %&gt;%
-  slice(1:10) %&gt;%
+  slice(50:60) %&gt;%
   knitr::kable() %&gt;%
   kable_styling()</code></pre>
 <table class="table" style="margin-left: auto; margin-right: auto;">
@@ -475,119 +491,130 @@ improve_name
 <tbody>
 <tr>
 <td style="text-align:left;">
-Cuon sp.
+Phlaocyon minor
 </td>
 <td style="text-align:left;">
-Cuon
+Phlaocyon minor
 </td>
 <td style="text-align:left;">
-Cuon
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis latrans
-</td>
-<td style="text-align:left;">
-Canis latrans
-</td>
-<td style="text-align:left;">
-Canis latrans
+Phlaocyon minor
 </td>
 </tr>
 <tr>
 <td style="text-align:left;">
-Canis latrans
+Desmocyon thomsoni
 </td>
 <td style="text-align:left;">
-Canis latrans
+Desmocyon thomsoni
 </td>
 <td style="text-align:left;">
-Canis latrans
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis sp.
-</td>
-<td style="text-align:left;">
-Canis
-</td>
-<td style="text-align:left;">
-Canis
+Desmocyon thomsoni
 </td>
 </tr>
 <tr>
 <td style="text-align:left;">
-Vulpes velox
+Promartes lepidus
 </td>
 <td style="text-align:left;">
-Vulpes velox
+Promartes lepidus
 </td>
 <td style="text-align:left;">
-Vulpes velox
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis edwardii
-</td>
-<td style="text-align:left;">
-Canis edwardii
-</td>
-<td style="text-align:left;">
-Canis edwardii
+Promartes lepidus
 </td>
 </tr>
 <tr>
 <td style="text-align:left;">
-Canis latrans
+Promartes lepidus
 </td>
 <td style="text-align:left;">
-Canis latrans
+Promartes lepidus
 </td>
 <td style="text-align:left;">
-Canis latrans
-</td>
-</tr>
-<tr>
-<td style="text-align:left;">
-Canis cf. edwardii
-</td>
-<td style="text-align:left;">
-Canis edwardii
-</td>
-<td style="text-align:left;">
-Canis
+Promartes lepidus
 </td>
 </tr>
 <tr>
 <td style="text-align:left;">
-Canis sp.
+Daphoenodon notionastes
 </td>
 <td style="text-align:left;">
-Canis
+Daphoenodon notionastes
 </td>
 <td style="text-align:left;">
-Canis
+Daphoenodon notionastes
 </td>
 </tr>
 <tr>
 <td style="text-align:left;">
-Vulpes cf. vulpes
+Daphoenodon n. sp. notionastes
 </td>
 <td style="text-align:left;">
-Vulpes vulpes
+Daphoenodon notionastes
 </td>
 <td style="text-align:left;">
-Vulpes
+Daphoenodon
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Phlaocyon achoros
+</td>
+<td style="text-align:left;">
+Phlaocyon achoros
+</td>
+<td style="text-align:left;">
+Phlaocyon achoros
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Cynarctoides lemur
+</td>
+<td style="text-align:left;">
+Cynarctoides lemur
+</td>
+<td style="text-align:left;">
+Cynarctoides lemur
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Cormocyon cf. copei
+</td>
+<td style="text-align:left;">
+Cormocyon copei
+</td>
+<td style="text-align:left;">
+Cormocyon
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Megalictis ? sp.
+</td>
+<td style="text-align:left;">
+Megalictis
+</td>
+<td style="text-align:left;">
+Megalictis
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+Phlaocyon ? cf. annectens
+</td>
+<td style="text-align:left;">
+Phlaocyon annectens
+</td>
+<td style="text-align:left;">
+Phlaocyon
 </td>
 </tr>
 </tbody>
 </table>
 <p>If we really wanted to be slick, we could combine all of the above into a single block.</p>
-<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&amp;interval=Quaternary&amp;show=full'
-canidae &lt;- read_csv(file = url) %&gt;%
+<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+carnivora &lt;- read_csv(file = url) %&gt;%
   as_tibble() %&gt;%
   clean_names() %&gt;%
   filter(accepted_rank %in% c('genus', 'species'), # either is good
@@ -597,6 +624,278 @@ canidae &lt;- read_csv(file = url) %&gt;%
                                            pattern = '[[:punct:]]'), 
                                 true = genus, 
                                 false = accepted_name))</code></pre>
+<div id="binning" class="section level2">
+<h2>Binning</h2>
+<p>Fossil occurrences in the PBDB have temporal information such as geologic stage, or a rough numerical age (max_ma, min_ma). The numerical age of a fossil occurrence is bounded between a max and a min. The nature of the fossil record means that we do not have exact ages for anything, instead we have ranges. This uncertainty in age presents a lot of problems that we have to deal with in our analyses, especially if the temporal order of our fossils matters to our question! An extremely common way to overcome this uncertainty is to coarsen the resolution of our fossils by binning them – assigning similarly aged fossils to a shared temporal unit. Each temporal bin can be said to have a “width” – the length of time covered by that bin.</p>
+<p>In our example, we may want to track diversity over time. We are going to do this by counting the number of unique genera present in our time bins. To do this, we have to determine how many bins there are and to which bin each fossil belongs. The age of each fossil, however, is a range and not a single value. We could use the midpoint of this range to assign each fossil to a bin, but what if the age range of some fossils is much larger than our bin width? First, let’s take a look at the amount of uncertainty there is in the age estimates of our fossil occurrences.</p>
+<pre class="r"><code>carnivora_clean %&gt;%
+  mutate(age_range = abs(max_ma - min_ma)) %&gt;%
+  ggplot(aes(x = age_range)) +
+  geom_histogram() +
+  labs(x = 'Age range (My)', y = 'Count') +
+  theme_bw()</code></pre>
+<pre><code>## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.</code></pre>
+<p><img src="data:image/png;base64,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" width="672" /></p>
+<p>We can see that a lot of our fossils have age uncertainty of 5 million years or less, and a few of them have large ranges of 10 million years or more. Fossils with age ranges greater than 10 million years are potentially suspect or at least are not high quality – certainly trying to assign them to a single 2 million year bin isn’t going to be ideal as it adds confidence where there is none. In your own analyses you might consider these situations on a case-by-case basis or try and find more information from other sources, but for purposes of this tutorial we will exclude those occurrences who’s age ranges are 10 million years or greater.</p>
+<p>We can dither over an “optimal” bin width for our data, but for the purpose of this exercise let’s just assign all our fossil occurrences to 2 million year bins.</p>
+<p>Because binning data is so common, I’ve written a function, <code>bin_ages()</code> to do this. I present it here and will use it to bin our data. The <code>bin_ages()</code> function follows that convention that the youngest bin is bin 1. I’ve written documentation for this function using <code>roxygen</code> formatting. Feel free to modify it or write your own.</p>
+<pre class="r"><code>#' Break time data up into bins
+#' 
+#' Have fun with this. basic rules. greater than equal to base, less than top.
+#' 
+#' @param x vector of ages
+#' @param by bin width
+#' @param age logical bin age returned, not number (default FALSE, return bin number)
+#' @return vector of bin memberships
+#' @author Peter D Smits &lt;peterdavidsmits@gmail.com&gt;
+bin_ages &lt;- function(x, by = NULL, number = NULL, age = FALSE) {
+
+  if(is.null(by) &amp; is.null(number)) {
+    return('no scheme given. specify either bin width or number of bins.')
+  }
+
+  if(!is.null(by) &amp; !is.null(number)) {
+    return('too much information. specify either bin width OR number of bins, not both.')
+  }
+
+  # range to bin
+  top &lt;- ceiling(max(x))
+  bot &lt;- floor(min(x))
+
+  # create bins
+  if(!is.null(by)) {
+    unt &lt;- seq(from = bot, to = top, by = by)
+  } else if(!is.null(number)) {
+    unt &lt;- seq(from = bot, to = top, length.out = number + 1)
+  }
+
+  # bin top and bottom
+  unt1 &lt;- unt[-length(unt)]
+  unt2 &lt;- unt[-1]
+
+  # assign memberships
+  uu &lt;- map2(unt1, unt2, ~ which(between(x, left = .x, right = .y)))
+
+  # what if we want the &quot;age&quot; of the bin, not just number?
+  if(age == TRUE) {
+    unt_age &lt;- map2_dbl(unt1, unt2, ~ median(c(.x, .y)))
+  }
+
+  # create output vector
+  y &lt;- x
+  for(ii in seq(length(uu))) {
+    if(age == FALSE) {
+      y[uu[[ii]]] &lt;- ii
+    } else if(age == TRUE) {
+      y[uu[[ii]]] &lt;- unt_age[ii]
+    }
+  }
+  y
+}</code></pre>
+<p>Let’s use this function to bin our data.</p>
+<pre class="r"><code>carnivora_bin &lt;-
+  carnivora_clean %&gt;%
+  filter(abs(max_ma - min_ma) &lt; 10) %&gt;%
+  mutate(mid_ma = (max_ma + min_ma) / 2,
+         bin = bin_ages(mid_ma, by = 2))
+
+carnivora_bin %&gt;%
+  summarize(bin_number = n_distinct(bin))</code></pre>
+<pre><code>## # A tibble: 1 x 1
+##   bin_number
+##        &lt;int&gt;
+## 1          9</code></pre>
+<p>Ok, so now we have a column <code>bin</code> that identifies the temporal bin that each occurrence belongs to. The quick summary at the bottom demonstrates that we have broken our data into 9 bins of equal length. The limit here is that our bins are identified by their number and not their “age”. Luckily, the <code>age</code> parameter of the <code>bin_ages()</code> function that changes the output from bin number to bin age. Here it is in use.</p>
+<pre class="r"><code>carnivora_bin &lt;- 
+  carnivora_bin %&gt;%
+  mutate(bin_age = bin_ages(mid_ma, by = 2, age = TRUE))
+
+# take a look
+carnivora_bin %&gt;%
+  select(mid_ma, bin, bin_age) %&gt;%
+  slice(1:10) %&gt;%
+  knitr::kable(.) %&gt;%
+  kableExtra::kable_styling()</code></pre>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:right;">
+mid_ma
+</th>
+<th style="text-align:right;">
+bin
+</th>
+<th style="text-align:right;">
+bin_age
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:right;">
+7.0165
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+8
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7.0165
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+8
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7.0165
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+8
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7.0165
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+8
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7.0165
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+8
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7.0165
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+8
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+7.6040
+</td>
+<td style="text-align:right;">
+2
+</td>
+<td style="text-align:right;">
+8
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+14.8950
+</td>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+14
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+13.7890
+</td>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+14
+</td>
+</tr>
+<tr>
+<td style="text-align:right;">
+13.7890
+</td>
+<td style="text-align:right;">
+5
+</td>
+<td style="text-align:right;">
+14
+</td>
+</tr>
+</tbody>
+</table>
+<p>As before, we can combine all of these operations into a set of piped statements.</p>
+<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+carnivora &lt;- read_csv(file = url) %&gt;%
+  as_tibble() %&gt;%
+  clean_names() %&gt;%
+  filter(accepted_rank %in% c('genus', 'species'), # either is good
+         !is.na(paleolng),
+         !is.na(paleolat)) %&gt;%
+  mutate(improve_name = if_else(str_detect(identified_name, 
+                                           pattern = '[[:punct:]]'), 
+                                true = genus, 
+                                false = accepted_name)) %&gt;%
+  filter(abs(max_ma - min_ma) &lt; 10) %&gt;%
+  mutate(mid_ma = (max_ma + min_ma) / 2,
+         bin = bin_ages(mid_ma, by = 2),
+         bin_age = bin_ages(mid_ma, by = 2, age = TRUE))</code></pre>
+<pre><code>## Warning: Duplicated column names deduplicated: 'cc' =&gt; 'cc_1' [47]</code></pre>
+<pre><code>## Parsed with column specification:
+## cols(
+##   .default = col_character(),
+##   occurrence_no = col_double(),
+##   reid_no = col_double(),
+##   flags = col_logical(),
+##   collection_no = col_double(),
+##   identified_no = col_double(),
+##   accepted_attr = col_logical(),
+##   accepted_no = col_double(),
+##   max_ma = col_double(),
+##   min_ma = col_double(),
+##   ref_pubyr = col_double(),
+##   reference_no = col_double(),
+##   plant_organ = col_logical(),
+##   plant_organ2 = col_logical(),
+##   abund_value = col_double(),
+##   lng = col_double(),
+##   lat = col_double(),
+##   collection_subset = col_logical(),
+##   paleolng = col_double(),
+##   paleolat = col_double(),
+##   zone = col_logical()
+##   # ... with 25 more columns
+## )</code></pre>
+<pre><code>## See spec(...) for full column specifications.</code></pre>
+<pre><code>## Warning: 1035 parsing failures.
+##  row             col           expected actual                                                                                          file
+## 1071 regionalsection 1/0/T/F/TRUE/FALSE  ValAH 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+## 1071 regionalbed     1/0/T/F/TRUE/FALSE  3     'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+## 1072 regionalsection 1/0/T/F/TRUE/FALSE  ValAH 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+## 1072 regionalbed     1/0/T/F/TRUE/FALSE  3     'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+## 1073 regionalsection 1/0/T/F/TRUE/FALSE  ValAH 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+## .... ............... .................. ...... .............................................................................................
+## See problems(...) for more details.</code></pre>
+</div>
 </div>
 <div id="sharing" class="section level1">
 <h1>Sharing</h1>
@@ -605,11 +904,11 @@ canidae &lt;- read_csv(file = url) %&gt;%
 <p>You probably also want to save a local copy of your filtered and cleaned dataset so you don’t have to re-run your cleaning scripts all the time. It also means you can separate your cleaning from the rest of your analysis. You’ll end up with multiple R scripts and multiple datasets – that’s good.</p>
 <p>For example, my projects tend to have multiple subfolders: R/, data/, and results/. In the R directory, I’ll have multiple scripts – one for loading and cleaning data, one for visualizing this cleaned data, and at least one for analyzing the cleaned data. I save the raw data to the data/ directory, and the cleaned data and figured in the results/ directory.</p>
 <p>Here is a quick example of what I mean without referencing subdirectories:</p>
-<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&amp;interval=Quaternary&amp;show=full'
-canidae &lt;- read_csv(file = url)
+<pre class="r"><code>url &lt;- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&amp;interval=Miocene&amp;show=full'
+carnivora &lt;- read_csv(file = url)
 
-canidae_clean &lt;- 
-  canidae %&gt;%
+carnivora_clean &lt;- 
+  carnivora %&gt;%
   as_tibble() %&gt;%
   clean_names() %&gt;%
   filter(accepted_rank %in% c('genus', 'species'), # either is good
@@ -619,12 +918,17 @@ canidae_clean &lt;-
                                            pattern = '[[:punct:]]'), 
                                 true = genus, 
                                 false = accepted_name))
+  filter(abs(max_ma - min_ma) &lt; 10) %&gt;%
+  mutate(mid_ma = (max_ma + min_ma) / 2,
+         bin = bin_ages(mid_ma, by = 2),
+         bin_age = bin_ages(mid_ma, by = 2, age = TRUE))
 
-write_csv(canidae, 'pbdb_raw.csv')
-write_csv(canidae_clean, 'pbdb_clean.csv')</code></pre>
+write_csv(carnivora, 'carnivora_raw.csv')
+write_csv(carnivora_clean, 'carnivora_clean.csv')</code></pre>
 </div>
 <div id="summary" class="section level1">
 <h1>Summary</h1>
+<p>In this lesson we introduced the PBDB API and how to include URL-based API calls in our R code. We also covered multiple aspects of cleaning PBDB data including species identifications and temporal binning. Finally, we briefly covered exporting our data, both raw and cleaned, so that our analyses are more reproducible. All of these steps are fundamental in any analysis and form a great deal of the work associated with any analysis problem.</p>
 </div>
 
 

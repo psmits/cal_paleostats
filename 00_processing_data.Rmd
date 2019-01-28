@@ -16,11 +16,13 @@ output:
 
 
 ```{r load_packages, results = 'hide'}
+
 library(tidyverse)
 library(janitor)
 
 library(knitr)
 library(kableExtra) 
+
 ```
 
 # Reading
@@ -29,7 +31,7 @@ The following material are recommended pre-readings before starting this tutoria
 
 - [Wickham 2014 "Tidy Data"](https://www.jstatsoft.org/article/view/v059i10).
 - [Wilson *et al.* 2017 "Good enough practices in scientific computing" **PLoS Computational Biology**](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005510).
-- [Verde Arregotia *et al.* 2018 "Good practices for sharing analysis-ready data in mammalogy and biodiversity research" **Hystrix, the Italian JOurnal of Mammalogy**](http://www.italian-journal-of-mammalogy.it/Good-practices-for-sharing-analysis-ready-data-in-mammalogy-and-biodiversity-research,101564,0,2.html).
+- [Verde Arregotia *et al.* 2018 "Good practices for sharing analysis-ready data in mammalogy and biodiversity research" **Hystrix, the Italian Journal of Mammalogy**](http://www.italian-journal-of-mammalogy.it/Good-practices-for-sharing-analysis-ready-data-in-mammalogy-and-biodiversity-research,101564,0,2.html).
 - [Bryan "Project oriented workflow" tidyverse.org](https://www.tidyverse.org/articles/2017/12/workflow-vs-script/).
 - [Bryan "Zen and aRt of Workflow Maintenance" talk](https://speakerdeck.com/jennybc/zen-and-the-art-of-workflow-maintenance).
 - [Bryan "Code Smells and Feels" talk](https://github.com/jennybc/code-smells-and-feels#readme).
@@ -38,14 +40,17 @@ The following material are recommended pre-readings before starting this tutoria
 
 # Introduction
 
-Any project you work on has multiple parts: data, documentation, reports, code, etc. Managing and keeping track of these parts is not a simple task. Today we will discuss data wrangling and management using the `tidyverse` set of packages and syntax.
+Any project you work on as a scientist has multiple parts: data, documentation, reports, code, etc. Managing and keeping track of these parts is not a simple task. Today we will discuss a small part of this process: data wrangling and sharing using the `tidyverse` set of packages and syntax. This lesson is in three parts: getting data, processing data, and sharing data.
 
-This lesson is in three parts: getting data, processing data, and sharing data.
+This tutorial assumes a fair amount of familiarity with the `tidyverse`, in particular `dplyr`. For a tutorial on using `dplyr` and `purrr` I recommend 
+- [R for Data Science](https://r4ds.had.co.nz/)
+- [https://dplyr.tidyverse.org/articles/dplyr.html](https://dplyr.tidyverse.org/articles/dplyr.html).
 
 
-# Getting data
 
-One of the greatest resources in paleobiology is the aptly named [Paleobiology Database](https://paleobiodb.org/), or PBDB for short. The PBDB is a freely avaliable internet repository of fossil occurrences, collections, taxonomic opinions, and lots of other information. The standard way to access information in the PBDB is through the class [Download Generator](https://paleobiodb.org/classic/displayDownloadGenerator). In the past it was very difficult to replicate previous PBDB downloads because of how difficult they were to communicate -- with so many manual options, it is hard to easily transmit this information to another author. 
+# Getting
+
+One of the greatest resources in paleobiology is the aptly named [Paleobiology Database](https://paleobiodb.org/), or PBDB for short. The PBDB is a freely available internet repository of fossil occurrences, collections, taxonomic opinions, and lots of other information. The standard way to access information in the PBDB is through the class [Download Generator](https://paleobiodb.org/classic/displayDownloadGenerator). In the past it was very difficult to replicate previous PBDB downloads because of how difficult they were to communicate -- with so many manual options, it is hard to easily transmit this information to another author. 
 
 The modern Download Generator (at time of this writing) has one major improvement for increasing the reproducibility of downloads -- a URL. Every option updates a URL that calls our data from the PBDB. Play around with the download options and see how the URL changes.
 
@@ -65,29 +70,31 @@ https://paleobiodb.org/data1.2/occs/list.txt?base_name=Cetacea&interval=Miocene&
 https://paleobiodb.org/data1.2/occs/taxa.txt?base_name=Cetacea&interval=Miocene&show=attr
 ```
 
-The best part of using a URL based call is that we can embed them in our R scripts. Here is a simple example:
+The best part of using a URL based call is that we can embed them in our R scripts. Here is a simple example (note I'm suppressing warnings here, so don't get scared when you see a lot of them):
 ```{r read_data, message = FALSE, results = 'hide', warning = FALSE}
 
-url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
-canidae <- read_csv(file = url)
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&interval=Miocene&show=full'
+carnivora <- read_csv(file = url)
 
 ```
 
-The `canidae` object represents the basic PBDB list response with all information for every observation as a data.frame. Because the URL points directly to a CSV (or JSON) file, we never have to actually save a copy of our data to our local machine and it instead just lives in memory -- though you might want to download and store the data every so often (e.g. `write_csv()`). Also, by using a direct API call to the PBDB instead of relying on a downloaded file our analyses can instaly be updated when new data is added to the PBDB.
+The `carnivora` object represents the basic PBDB list response with all information for every observation as a data.frame. Because the URL points directly to a CSV (or JSON) file, we never have to actually save a copy of our data to our local machine and it instead just lives in memory -- though you might want to download and store the data every so often (e.g. `write_csv()`). Also, by using a direct API call to the PBDB instead of relying on a downloaded file our analyses can instaly be updated when new data is added to the PBDB.
 
 I find tibbles easier to process than data.frame-s, so my scripts tend to look like this:
 ```{r read_astibble, message = FALSE, results = 'hide', warning = FALSE}
-url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
-canidae <- read_csv(file = url) %>%
+
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&interval=Miocene&show=full'
+carnivora <- read_csv(file = url) %>%
   as_tibble()
+
 ```
 
-If you play around with the canidae object you'll notice it has **TONS** of columns -- 118! Each of these columns records some bit of information about that fossil -- taxonomic identity, location, source, enterer, etc. You can check the [API documentation](https://paleobiodb.org/data1.2/occs/list_doc.html) for a description of each column. Frustrating many of these fields might be empty or inconsistently entered -- I'm looking at you lithology1 and environment. Additionally, a lot of our fossils might not be identified to the species or even genus level, or are not identified with confidence. This serves as an important point about the PBDB: the data isn't perfect. This means that the next step of our analysis is "cleaning" or "tidying" our data until we can actually analyze it!
+If you play around with the carnivora object you'll notice it has **TONS** of columns -- 118! Each of these columns records some bit of information about that fossil -- taxonomic identity, location, source, enterer, etc. You can check the [API documentation](https://paleobiodb.org/data1.2/occs/list_doc.html) for a description of each column. Frustrating many of these fields might be empty or inconsistently entered -- I'm looking at you lithology1 and environment. Additionally, a lot of our fossils might not be identified to the species or even genus level, or are not identified with confidence. This serves as an important point about the PBDB: the data isn't perfect. This means that the next step of our analysis is "cleaning" or "tidying" our data until we can actually analyze it!
 
 
-# Cleaning and tidying
+# Processing
 
-This section focuses on using the `dplyr` package from the `tidyverse` to process our data until it is actually usable for our purposes. 
+This section focuses on using the `dplyr` package from the `tidyverse` to process our data until it is actually usable for our purposes. Luckily, our data is already considered "tidy" because each row is an observation and each column is a variable. This does not mean our data is ready for analysis yet. Our job as analysts is to then process and filter our data till it is ready to be analyzed. Is every observation up to snuff? Or are there errors encoded in our data?
 
 Example filters we might consider
 - identified precisely -- no ambiguous or imperfect "calls"
@@ -106,8 +113,9 @@ Luckily, these operations are very easy to do with with `dplyr` and the [`janito
 For example, let's filter out the imprecise fossils and those not identified to at least the genus level, and have paleocoordinates. Let's also make sure all the variable names have the same logic (they are all already fine, but this is a good habit to get into!)
 
 ```{r filter}
-canidae_filter <- 
-  canidae %>%
+
+carnivora_filter <- 
+  carnivora %>%
   janitor::clean_names() %>%
   filter(accepted_rank %in% c('genus', 'species'), # either is good
          !is.na(paleolng),
@@ -115,29 +123,28 @@ canidae_filter <-
 
 ```
 
-This new tibble, `canidae_filter`, is a subset of the ordinal data that should follow the rules we've laid out in the URL-based API call and the few lines of R code. If we gave this document to someone else, they could reproduce our dataset.
+This new tibble, `carnivora_filter`, is a subset of the ordinal data that should follow the rules we've laid out in the URL-based API call and the few lines of R code. If we gave this document to someone else, they could reproduce our dataset.
 
 The accepted_* variables in PBDB data correspond to the accepted, or best, identification of a fossil. Differences between identified_* and accepted_* variables are commonly due to re-identification or changes in taxonomy. While this is really convenient on its face, sometimes the accepted species names assumes too much confidence in the identification. For example, let's take a close look at a few records.
 
 ```{r species_names}
 
-canidae_table <- 
-  canidae_filter %>%
+carnivora_table <- 
+  carnivora_filter %>%
   select(identified_name, 
          identified_rank, 
          accepted_name, 
          accepted_rank) %>%
-  slice(1:10)
+  slice(50:60)
 
-knitr::kable(canidae_table) %>%
+knitr::kable(carnivora_table) %>%
   kableExtra::kable_styling()
 
 ```
 
-In most cases there is very good correspondence between the identified name and the accepted name, but not always. For example, the eighth line of this table corresponds to a fossil identified as "Canis cf. edwardii" but is given the accepted name of "Canis edwardii" -- this identification is arguably overconfident! But does it matter? That's up to you and your research, but let's assume it does for now. How do we resolve this and downgrade these overconfident identifications?
+In most cases there is very good correspondence between the identified name and the accepted name, but not always. For example, the ninth of this table corresponds to a fossil identified as "Cormocyon cv. copei" but is given the accepted name of "Cormocyon copei" -- an identification that is arguably overconfident! But does it matter? That's up to you and your research, but let's assume it does for now. How do we resolve this and downgrade these overconfident identifications?
 
-The simplest way might be to downgrade any identified names that include punctuation and non-character symbols to just there genus. After all, "cf.", "sp." and "n. sp." all involve punctuation, and sometimes fossils have complex identifications like "cf. Dusicyon (Lycalopex) sp." which is just a nightmare. The complication comes with the "cf." appears before the genus name -- this means the genus identification is uncertain. Do we accept genus ids but not species? Or do we throw those out because they are effectively identified as far as the family-level? That's up to you and your research, but let's assume it does for now so that we can learn how.
-
+The simplest way might be to downgrade any identified names that include punctuation and non-character symbols to just there genus. After all, "cf.", "sp." and "n. sp." all involve punctuation. 
 
 But how do we deal with text information? Turns out there is a whole special language for dealing with text: [regular expressions](https://en.wikipedia.org/wiki/Regular_expression). RegEx are sequences of characters that help us match specific patterns in text. In this example, I'm using a RegEx to identify all cases where there is punctuation present in the identified name -- I don't not care *where* the punctuation is, just that there *is* punctuation. 
 
@@ -147,16 +154,16 @@ I always spend a lot of time on Google figuring our RegEx before I use them as t
 
 ```{r correct_names}
 
-canidae_clean <- 
-  canidae_filter %>%
+carnivora_clean <- 
+  carnivora_filter %>%
   mutate(improve_name = if_else(str_detect(identified_name, 
                                            pattern = '[[:punct:]]'), 
                                 true = genus, 
                                 false = accepted_name))
 
-canidae_clean %>%
+carnivora_clean %>%
   select(identified_name, accepted_name, improve_name) %>%
-  slice(1:10) %>%
+  slice(50:60) %>%
   knitr::kable() %>%
   kable_styling()
 
@@ -166,8 +173,8 @@ If we really wanted to be slick, we could combine all of the above into a single
 
 ```{r full_example, message = FALSE, results = 'hide', warning = FALSE}
 
-url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
-canidae <- read_csv(file = url) %>%
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&interval=Miocene&show=full'
+carnivora <- read_csv(file = url) %>%
   as_tibble() %>%
   clean_names() %>%
   filter(accepted_rank %in% c('genus', 'species'), # either is good
@@ -180,6 +187,139 @@ canidae <- read_csv(file = url) %>%
 
 ```
 
+
+## Binning
+
+Fossil occurrences in the PBDB have temporal information such as geologic stage, or a rough numerical age (max_ma, min_ma). The numerical age of a fossil occurrence is bounded between a max and a min. The nature of the fossil record means that we do not have exact ages for anything, instead we have ranges. This uncertainty in age presents a lot of problems that we have to deal with in our analyses, especially if the temporal order of our fossils matters to our question! An extremely common way to overcome this uncertainty is to coarsen the resolution of our fossils by binning them -- assigning similarly aged fossils to a shared temporal unit. Each temporal bin can be said to have a "width" -- the length of time covered by that bin. 
+
+In our example, we may want to track diversity over time. We are going to do this by counting the number of unique genera present in our time bins. To do this, we have to determine how many bins there are and to which bin each fossil belongs. The age of each fossil, however, is a range and not a single value. We could use the midpoint of this range to assign each fossil to a bin, but what if the age range of some fossils is much larger than our bin width? 
+First, let's take a look at the amount of uncertainty there is in the age estimates of our fossil occurrences.
+```{r range_ilo}
+
+carnivora_clean %>%
+  mutate(age_range = abs(max_ma - min_ma)) %>%
+  ggplot(aes(x = age_range)) +
+  geom_histogram() +
+  labs(x = 'Age range (My)', y = 'Count') +
+  theme_bw()
+
+```
+
+We can see that a lot of our fossils have age uncertainty of 5 million years or less, and a few of them have large ranges of 10 million years or more. Fossils with age ranges greater than 10 million years are potentially suspect or at least are not high quality -- certainly trying to assign them to a single 2 million year bin isn't going to be ideal as it adds confidence where there is none. In your own analyses you might consider these situations on a case-by-case basis or try and find more information from other sources, but for purposes of this tutorial we will exclude those occurrences who's age ranges are 10 million years or greater.
+
+We can dither over an "optimal" bin width for our data, but for the purpose of this exercise let's just assign all our fossil occurrences to 2 million year bins. 
+
+Because binning data is so common, I've written a function, `bin_ages()` to do this. I present it here and will use it to bin our data. The `bin_ages()` function follows that convention that the youngest bin is bin 1. I've written documentation for this function using `roxygen` formatting. Feel free to modify it or write your own.
+
+```{r bin_foo}
+
+#' Break time data up into bins
+#' 
+#' Have fun with this. basic rules. greater than equal to base, less than top.
+#' 
+#' @param x vector of ages
+#' @param by bin width
+#' @param age logical bin age returned, not number (default FALSE, return bin number)
+#' @return vector of bin memberships
+#' @author Peter D Smits <peterdavidsmits@gmail.com>
+bin_ages <- function(x, by = NULL, number = NULL, age = FALSE) {
+
+  if(is.null(by) & is.null(number)) {
+    return('no scheme given. specify either bin width or number of bins.')
+  }
+
+  if(!is.null(by) & !is.null(number)) {
+    return('too much information. specify either bin width OR number of bins, not both.')
+  }
+
+  # range to bin
+  top <- ceiling(max(x))
+  bot <- floor(min(x))
+
+  # create bins
+  if(!is.null(by)) {
+    unt <- seq(from = bot, to = top, by = by)
+  } else if(!is.null(number)) {
+    unt <- seq(from = bot, to = top, length.out = number + 1)
+  }
+
+  # bin top and bottom
+  unt1 <- unt[-length(unt)]
+  unt2 <- unt[-1]
+
+  # assign memberships
+  uu <- map2(unt1, unt2, ~ which(between(x, left = .x, right = .y)))
+
+  # what if we want the "age" of the bin, not just number?
+  if(age == TRUE) {
+    unt_age <- map2_dbl(unt1, unt2, ~ median(c(.x, .y)))
+  }
+
+  # create output vector
+  y <- x
+  for(ii in seq(length(uu))) {
+    if(age == FALSE) {
+      y[uu[[ii]]] <- ii
+    } else if(age == TRUE) {
+      y[uu[[ii]]] <- unt_age[ii]
+    }
+  }
+  y
+}
+
+```
+
+Let's use this function to bin our data.
+
+```{r bin_carnivora}
+
+carnivora_bin <-
+  carnivora_clean %>%
+  filter(abs(max_ma - min_ma) < 10) %>%
+  mutate(mid_ma = (max_ma + min_ma) / 2,
+         bin = bin_ages(mid_ma, by = 2))
+
+carnivora_bin %>%
+  summarize(bin_number = n_distinct(bin))
+
+```
+
+Ok, so now we have a column `bin` that identifies the temporal bin that each occurrence belongs to. The quick summary at the bottom demonstrates that we have broken our data into 9 bins of equal length. The limit here is that our bins are identified by their number and not their "age". Luckily, the `age` parameter of the `bin_ages()` function that changes the output from bin number to bin age. Here it is in use.
+```{r bin_age}
+
+carnivora_bin <- 
+  carnivora_bin %>%
+  mutate(bin_age = bin_ages(mid_ma, by = 2, age = TRUE))
+
+# take a look
+carnivora_bin %>%
+  select(mid_ma, bin, bin_age) %>%
+  slice(1:10) %>%
+  knitr::kable(.) %>%
+  kableExtra::kable_styling()
+
+```
+
+As before, we can combine all of these operations into a set of piped statements.
+```{r bin_complete}
+
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&interval=Miocene&show=full'
+carnivora <- read_csv(file = url) %>%
+  as_tibble() %>%
+  clean_names() %>%
+  filter(accepted_rank %in% c('genus', 'species'), # either is good
+         !is.na(paleolng),
+         !is.na(paleolat)) %>%
+  mutate(improve_name = if_else(str_detect(identified_name, 
+                                           pattern = '[[:punct:]]'), 
+                                true = genus, 
+                                false = accepted_name)) %>%
+  filter(abs(max_ma - min_ma) < 10) %>%
+  mutate(mid_ma = (max_ma + min_ma) / 2,
+         bin = bin_ages(mid_ma, by = 2),
+         bin_age = bin_ages(mid_ma, by = 2, age = TRUE))
+
+```
 
 
 
@@ -195,13 +335,13 @@ For example, my projects tend to have multiple subfolders: R/, data/, and result
 
 
 Here is a quick example of what I mean without referencing subdirectories:
-```{r eval = FALSE}
+```{r save, eval = FALSE}
 
-url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Canidae&interval=Quaternary&show=full'
-canidae <- read_csv(file = url)
+url <- 'https://paleobiodb.org/data1.2/occs/list.txt?base_name=Carnivora&interval=Miocene&show=full'
+carnivora <- read_csv(file = url)
 
-canidae_clean <- 
-  canidae %>%
+carnivora_clean <- 
+  carnivora %>%
   as_tibble() %>%
   clean_names() %>%
   filter(accepted_rank %in% c('genus', 'species'), # either is good
@@ -211,11 +351,17 @@ canidae_clean <-
                                            pattern = '[[:punct:]]'), 
                                 true = genus, 
                                 false = accepted_name))
+  filter(abs(max_ma - min_ma) < 10) %>%
+  mutate(mid_ma = (max_ma + min_ma) / 2,
+         bin = bin_ages(mid_ma, by = 2),
+         bin_age = bin_ages(mid_ma, by = 2, age = TRUE))
 
-write_csv(canidae, 'pbdb_raw.csv')
-write_csv(canidae_clean, 'pbdb_clean.csv')
+write_csv(carnivora, 'carnivora_raw.csv')
+write_csv(carnivora_clean, 'carnivora_clean.csv')
+
 ```
 
 
-
 # Summary
+
+In this lesson we introduced the PBDB API and how to include URL-based API calls in our R code. We also covered multiple aspects of cleaning PBDB data including species identifications and temporal binning. Finally, we briefly covered exporting our data, both raw and cleaned, so that our analyses are more reproducible. All of these steps are fundamental in any analysis and form a great deal of the work associated with any analysis problem.
