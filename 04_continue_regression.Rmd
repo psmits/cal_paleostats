@@ -16,17 +16,28 @@ output:
 
 
 ```{r load_packages, message = F, results = 'hide'}
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(purrr)
+library(viridis)
+
+library(brms)
+library(tidybayes)
+
 library(knitr)
 library(kableExtra)
 
-library(tidyverse)
-library(brms)
-library(tidybayes)
-library(here)
-library(janitor)
-
 theme_set(theme_bw())
+
 ```
+
+
+# Introduction
+
+In a previous lesson we introduced linear regression with a single, binary predictor. In this lesson we will be exploring more complicated forms of linear regression including continuous predictors, multiple predictors, and interactions.
+
 
 
 # Continuous predictors
@@ -37,6 +48,73 @@ The first part of this lesson is devoted to introducing continuous predictors. E
 
 
 ## Our first example
+
+
+In our analyses today we will be using the [Pan\uppercase{theria}](http://www.esapubs.org/archive/ecol/E090/184/default.htm) database, a large collection of trait data for extant mammals. You can review the [data dictionary](http://esapubs.org/archive/ecol/E090/184/metadata.htm) for explinations of each variable. Missing data is coded as -999.00, something we can use when importing our data. Also, a lot of the variables have terrible names with lots of punction, captial letters and numbers -- all of these are very bad to program around. 
+
+That all being said, let's import the dataset, clean it up a bit, and then start visualizing it.
+```{r pantheria}
+
+pantheria <- read_tsv(here('PanTHERIA_1-0_WR05_Aug2008.txt'), 
+											na = '-999.00') %>%
+	clean_names() %>% 
+	mutate(mass_log = log(x5_1_adult_body_mass_g),
+				 range_group_log = log(x22_1_home_range_km2),
+				 range_indiv_log = log(x22_2_home_range_indiv_km2),
+				 density_log = log(x21_1_population_density_n_km2),
+				 activity_cycle = case_when(x1_1_activity_cycle == 1 ~ 'nocturnal',
+																		x1_1_activity_cycle == 2 ~ 'mixed',
+																		x1_1_activity_cycle == 3 ~ 'diurnal'))
+```
+
+```{r pantheria_plot1}
+
+pantheria %>%
+	drop_na(activity_cycle) %>%
+	ggplot(aes(x = activity_cycle, 
+						 y = range_group_log)) +
+  geom_violin(fill = 'grey80', 
+							draw_quantiles = c(0.1, 0.5, 0.9)) +
+  geom_jitter(height = 0) +
+  labs(x = 'Activity Cycle', 
+       y = expression(paste('Group range size ', log(km^2))),
+       title = 'Group range size differences between activity cycles')
+
+```
+
+```{r pantheria_plot2}
+
+pantheria %>%
+  ggplot(aes(x = mass_log, y = density_log, colour = msw05_order)) +
+  geom_point() +
+  scale_colour_viridis(discrete = TRUE, name = 'Order') +
+  labs(x = expression(paste('Body mass ', log(g^2))),
+       y = expression(paste('Population density ', log(n / km^2))),
+       title = 'Body mass and population density, orders highlighted')
+
+```
+
+
+There are tons of ways we could deconstruct this dataset, some much more logical than others. For this tutorial, we're going to focus on trying to understand how population density varies across mammals. There are tons of factors that can influence the population density of a species, so our process will be to slowly build up a model one predictor at a time.
+
+Let's begin our model in a similar fashion to our previous one, with an intercept-only model. We can then add our first continuous predictor from there.
+
+Our response variable is `density_log`, which is a continuous value from $-\infty$ to $\infty$.
+
+```{r intercept_only, cache = TRUE, message = FALSE, results = 'hide'}
+
+m_1 <- brm(data = pantheria,
+           family = gaussian(),
+           formula = bf(density_log ~ 1),
+           prior = c(prior(normal(0, 10), class = Intercept),
+                     prior(cauchy(0, 5), class = sigma)),
+           iter = 2000,
+           warmup = 1000,
+           chains = 4,
+           cores = 4,
+           refresh = 0)
+
+```
 
 
 
