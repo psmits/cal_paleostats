@@ -1,5 +1,5 @@
 ---
-title: "Going Beyond Simple Regression Models"
+title: "Expanding on Simple Regression Models"
 output: 
   html_document: 
     toc: true 
@@ -50,7 +50,7 @@ The first part of this lesson is devoted to introducing continuous predictors. E
 ## Our first example
 
 
-In our analyses today we will be using the [Pan\uppercase{theria}](http://www.esapubs.org/archive/ecol/E090/184/default.htm) database, a large collection of trait data for extant mammals. You can review the [data dictionary](http://esapubs.org/archive/ecol/E090/184/metadata.htm) for explinations of each variable. Missing data is coded as -999.00, something we can use when importing our data. Also, a lot of the variables have terrible names with lots of punction, captial letters and numbers -- all of these are very bad to program around. 
+In our analyses today we will be using the [PanTHERIA}](http://www.esapubs.org/archive/ecol/E090/184/default.htm) database, a large collection of trait data for extant mammals. You can review the [data dictionary](http://esapubs.org/archive/ecol/E090/184/metadata.htm) for explinations of each variable. Missing data is coded as -999.00, something we can use when importing our data. Also, a lot of the variables have terrible names with lots of punction, captial letters and numbers -- all of these are very bad to program around. 
 
 That all being said, let's import the dataset, clean it up a bit, and then start visualizing it.
 ```{r pantheria}
@@ -59,12 +59,12 @@ pantheria <- read_tsv(here('PanTHERIA_1-0_WR05_Aug2008.txt'),
 											na = '-999.00') %>%
 	clean_names() %>% 
 	mutate(mass_log = log(x5_1_adult_body_mass_g),
-				 range_group_log = log(x22_1_home_range_km2),
-				 range_indiv_log = log(x22_2_home_range_indiv_km2),
-				 density_log = log(x21_1_population_density_n_km2),
-				 activity_cycle = case_when(x1_1_activity_cycle == 1 ~ 'nocturnal',
-																		x1_1_activity_cycle == 2 ~ 'mixed',
-																		x1_1_activity_cycle == 3 ~ 'diurnal'))
+         range_group_log = log(x22_1_home_range_km2),
+         range_indiv_log = log(x22_2_home_range_indiv_km2),
+         density_log = log(x21_1_population_density_n_km2),
+         activity_cycle = case_when(x1_1_activity_cycle == 1 ~ 'nocturnal',
+                                    x1_1_activity_cycle == 2 ~ 'mixed',
+                                    x1_1_activity_cycle == 3 ~ 'diurnal')) 
 ```
 
 ```{r pantheria_plot1}
@@ -75,10 +75,13 @@ pantheria %>%
 						 y = range_group_log)) +
   geom_violin(fill = 'grey80', 
 							draw_quantiles = c(0.1, 0.5, 0.9)) +
-  geom_jitter(height = 0) +
+  geom_jitter(height = 0,
+              alpha = 0.5,
+              mapping = aes(colour = msw05_order)) +
+  scale_colour_viridis(discrete = TRUE, name = 'Order') +
   labs(x = 'Activity Cycle', 
        y = expression(paste('Group range size ', log(km^2))),
-       title = 'Group range size differences between activity cycles')
+       title = 'Group range size differences between activity cycles, \norders highlighted')
 
 ```
 
@@ -99,9 +102,34 @@ There are tons of ways we could deconstruct this dataset, some much more logical
 
 Let's begin our model in a similar fashion to our previous one, with an intercept-only model. We can then add our first continuous predictor from there.
 
-Our response variable is `density_log`, which is a continuous value from $-\infty$ to $\infty$.
+Our response variable is `density_log` is a continuous value from $-\infty$ to $\infty$ so it is probably a good place to start by assuming it could be approximated with a normal distribution, as is common with linear regression. The normal distribution as defined in `brms` has two parameters: mean and standard deviation. For our simple intercept-only model, we do not need to expand on these parameters -- after all, the intercept describes the average value or *mean* of the response.
 
-```{r intercept_only, cache = TRUE, message = FALSE, results = 'hide'}
+Let's write this out. Let $y$ be `density_log`, $\mu$ be the mean of `density_log`, and $\sigma$ be the standard deviation of `density_log`.
+
+$$
+y \sim \text{Normal}(\mu, \sigma)
+$$
+Can you recall what all the of the parts of the above statement mean? What are we missing? Priors!
+
+We can probably stick with pretty vague priors here -- the mean is probably somewhere between -10 and 10 log(millimeters) and probably has at least that much range. Here's my starting point. Could I improve it? Do we have enough data that it probably won't matter?
+
+$$
+\begin{align}
+y &\sim \text{Normal}(\mu, \sigma) \\
+\mu &\sim \text{Normal}(0, 10) \\
+\mu &\sim \text{Cauchy}^{+}(0, 10) \\
+\end{align}
+$$
+
+Something is new here -- what is this Cauchy$^{+}$ distribution? What happened to our uniform prior we used last lesson? 
+
+Now that we've designed our model, let's implement it in `brms`.
+
+
+Ignore the species that have missing data for `density_log`.
+
+
+```{r fit_intercept, cache = TRUE, message = FALSE, results = 'hide'}
 
 m_1 <- brm(data = pantheria,
            family = gaussian(),
@@ -117,16 +145,122 @@ m_1 <- brm(data = pantheria,
 ```
 
 
+As with any model, we should see how well it describes our data. 
+
+
+## Adding a single continuous predictor
+
+Ignore the species that have missing data for `density_log` and `mass_log`.
+
+```{r fit_predictor, cache = TRUE, message = FALSE, results = 'hide'}
+
+m_2 <- brm(data = pantheria,
+           family = gaussian(),
+           formula = bf(density_log ~ 1 + mass_log),
+           prior = c(prior(normal(0, 10), class = Intercept),
+                     prior(normal(0, 10), class = b),
+                     prior(cauchy(0, 5), class = sigma)),
+           iter = 2000,
+           warmup = 1000,
+           chains = 4,
+           cores = 4,
+           refresh = 0)
+
+```
 
 
 
-## Centering
+
+### Centering
+
+```{r center}
+
+pantheria <- 
+  pantheria %>%
+  mutate(mass_log_center = mass_log - mean(mass_log, na.rm = TRUE))
+
+```
+
+Now let's refit the model with the newly centered data.
+
+Ignore the species that have missing data for `density_log` and `mass_log`.
+
+```{r fit_center, cache = TRUE, message = FALSE, results = 'hide'}
+
+m_3 <- brm(data = pantheria,
+           family = gaussian(),
+           formula = bf(density_log ~ 1 + mass_log_center),
+           prior = c(prior(normal(0, 10), class = Intercept),
+                     prior(normal(0, 10), class = b),
+                     prior(cauchy(0, 5), class = sigma)),
+           iter = 2000,
+           warmup = 1000,
+           chains = 4,
+           cores = 4,
+           refresh = 0)
+
+```
 
 
 
+# More than one predictor
 
 
-# Multiple predictors
+$$
+\begin{align}
+y_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
+\mu_{i} &= \alpha + \beta_{1} m_{i} + \beta_{2} o_{i} + \beta_{3} n_{i} \\
+\alpha &\sim \text{Normal}(0, 10) \\
+\beta &\sim \text{Normal}(0, 5) \\
+\sigma &\sim \text{Cauchy}^{+}(0, 5) \\
+\end{align}
+$$
+
+
+```{r fit_multi, cache = TRUE, message = FALSE, results = 'hide'}
+
+m_4 <- brm(data = pantheria,
+           family = gaussian(),
+           formula = bf(density_log ~ 1 + mass_log_center + activity_cycle),
+           prior = c(prior(normal(0, 10), class = Intercept),
+                     prior(normal(0, 10), class = b),
+                     prior(cauchy(0, 5), class = sigma)),
+           iter = 2000,
+           warmup = 1000,
+           chains = 4,
+           cores = 4,
+           refresh = 0)
+
+```
+
 
 
 ## Scaling
+
+
+```{r scale}
+
+pantheria <- 
+  pantheria %>%
+  drop_na(mass_log) %>%
+  mutate(mass_log_scale = scale(mass_log, center = TRUE, scale = TRUE))
+
+```
+
+
+```{r fit_multiscale, cache = TRUE, message = FALSE, results = 'hide'}
+
+m_4 <- brm(data = pantheria,
+           family = gaussian(),
+           formula = bf(density_log ~ 1 + mass_log_scale + activity_cycle),
+           prior = c(prior(normal(0, 10), class = Intercept),
+                     prior(normal(0, 10), class = b),
+                     prior(cauchy(0, 5), class = sigma)),
+           iter = 2000,
+           warmup = 1000,
+           chains = 4,
+           cores = 4,
+           refresh = 0)
+
+```
+
