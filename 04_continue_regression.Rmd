@@ -22,6 +22,7 @@ library(here)
 library(janitor)
 library(purrr)
 library(viridis)
+library(RColorBrewer)
 
 library(brms)
 library(tidybayes)
@@ -123,10 +124,7 @@ $$
 
 Something is new here -- what is this Cauchy$^{+}$ distribution? What happened to our uniform prior we used last lesson? 
 
-Now that we've designed our model, let's implement it in `brms`.
-
-
-Ignore the species that have missing data for `density_log`.
+Let's implement this model in `brms`. We are going to need to ignore species that have missing data for `density_log` -- something `brms()` does automatically. Is this choice ideal? Let's assume it is for now, but if you are interested in learning more about handling missing values in our models, look up **data imputation** -- this is an advanced topic we will not be covering in these introductory lessons.
 
 
 ```{r fit_intercept, cache = TRUE, message = FALSE, results = 'hide'}
@@ -144,13 +142,74 @@ m_1 <- brm(data = pantheria,
 
 ```
 
+```{r intercept_print}
 
-As with any model, we should see how well it describes our data. 
+print(m_1)
+
+```
+
+
+As with any model, we should see how well it describes our data -- maybe this simple model does a good enough job?
+
+Let's compare our observed distribution of population densities versus our posterior predictive distribution.
+
+```{r intercept_ppc}
+
+pantheria %>%
+  drop_na(density_log) %>%
+  add_predicted_draws(model = m_1,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = .prediction, group = .draw)) +
+  geom_line(stat = 'density', 
+            alpha = 0.1,
+            colour = 'blue') +
+  geom_line(stat = 'density',
+            data = pantheria %>% drop_na(density_log, mass_log),
+            mapping = aes(x = density_log,
+                          group = NULL),
+            colour = 'black',
+            size = 1.5) +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = expression(paste('Population density  ', log(n / km^2))),
+       title = 'Population density, actual versus predicted.') +
+  NULL
+
+```
+
+While we might be describing the overall mean and standard deviation of our data, I do not think our simple model is capable of capturing the a lot of the complexity in our data. Our data appears to be multimodal and has a very different spread, especially on the right-hand side. We are going to have to include more information we if want to better describe our data.
+
 
 
 ## Adding a single continuous predictor
 
-Ignore the species that have missing data for `density_log` and `mass_log`.
+Just like in our previous lesson, to improve our model we're going to add a single predictor. What's new to this lesson is that that predictor is a continuous variable: average individual mass in log grams or `mass_log`. 
+
+In linear regression, our predictors tend to describe change in mean $y$ has a function of an intercept, one or more regression coefficients, and one or more predictor. 
+
+To do this, we need to define $\mu$ as a function of our predictor. Do you remember from last lesson how we did this? Try writing out a model definition by hand.
+
+First, let's define $x$ as `mass_log`. Also, let's define two more variables: let $\alpha$ be the intercept of our regression, and let $\beta$ be the regression coefficient for $x$. Given this new information, here is how we can write out our regression model.
+$$
+\begin{align}
+y_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
+\mu_{i} &= \alpha + \beta x_{i} \\
+\alpha &\sim \text{Normal}(0, 10) \\
+\beta &\sim \text{Normal}(0, 5) \\
+\sigma &\sim \text{Cauchy}^{+}(0, 5) \\
+\end{align}
+$$
+
+You'll notice this model is functionally identical to our model with a single binary predictor. The difference here is that $x$ can take on values that are not just 0 and 1.
+
+How do we interpret all of these parameters? Our previous lesson gave us all the information we needed to describe each parameter, but I will reiterate them here because this is really important. If we don't know what our parameters precisely mean, we cannot interpret them.
+
+- $\mu$ average value of $y$
+- $\sigma$ standard deviation of $y$
+- $\alpha$ intercept, average value of $y$ when $x$ = 0
+- $\beta$ slope, expected change in $y$ per unit change in $x$
+
+Let's implement this model in `brms`. Like before, we are going to ignore species that have missing data for either `density_log` or `mass_log` -- `brms()` does this for us automatically. 
 
 ```{r fit_predictor, cache = TRUE, message = FALSE, results = 'hide'}
 
@@ -168,11 +227,86 @@ m_2 <- brm(data = pantheria,
 
 ```
 
+```{r predictor_print}
+
+print(m_2)
+
+```
+
+Now let's see how much adding this predictor improves our ability to describe $y$. Let's look at this two ways -- posterior predictive comparison between densities of $y$ and $y^{\tilde}$, 
+
+
+```{r predictor_ppc}
+
+pantheria %>%
+  drop_na(density_log, mass_log) %>%
+  add_predicted_draws(model = m_2,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = .prediction, group = .draw)) +
+  geom_line(stat = 'density', 
+            alpha = 0.1,
+            colour = 'blue') +
+  geom_line(stat = 'density',
+            data = pantheria %>% drop_na(density_log, mass_log),
+            mapping = aes(x = density_log,
+                          group = NULL),
+            colour = 'black',
+            size = 1.5) +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = expression(paste('Population density  ', log(n / km^2))),
+       title = 'Population density, actual versus predicted.') +
+  NULL
+
+```
+
+```{r predictor_fitted}
+
+pantheria %>%
+  drop_na(density_log, mass_log) %>%
+  add_fitted_draws(model = m_2,
+                   n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = mass_log, y = density_log)) +
+  geom_line(mapping = aes(y = .value, group = .draw),
+            alpha = 1 / 20,
+            colour = brewer.pal(5, "Blues")[[5]]) +
+  geom_point(data = pantheria, size = 2) +
+  scale_fill_brewer()
+
+```
+
+```{r predictor_predicted}
+
+pantheria %>%
+  drop_na(density_log, mass_log) %>%
+  add_predicted_draws(model = m_2,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = mass_log, y = density_log)) +
+  stat_lineribbon(mapping = aes(y = .prediction),
+                  .width = c(0.9, 0.5, 0.1),
+                  colour = brewer.pal(5, "Blues")[[5]]) +
+  geom_point(data = pantheria, size = 2) +
+  scale_fill_brewer()
+
+```
 
 
 
-### Centering
 
+
+
+
+It appears that this model does slightly better than our earlier model, but still fails are adequately representing our data. We are failing to reproduce the multi-modality of the data. What could we do to improve our model?
+
+
+
+### Aside: Centering
+
+The intercept of a linear regression model is normally interpreted as the average value of $y$ when all predictors equal 0. A consequence of this definition means that the value of the intercept is frequently uninterpretable without also studying the regression coefficients. This is also the reason that we commonly need very weak priors for intercepts.
+
+A trick for improving our interpretation of the intercept $\alpha$ is **centering** our (continuous) predictors. Centering is the procedure of subtracting the mean of a variable from each value. Namely:
 ```{r center}
 
 pantheria <- 
@@ -181,9 +315,9 @@ pantheria <-
 
 ```
 
-Now let's refit the model with the newly centered data.
+$\alpha$ is still the expected value of the outcome variable when the predictor is equal to zero. But now the mean value of the predictor is also zero. So the intercept all means: the expected value of the outcome, when the predictor is at its average value. This makes interpreting the intercept a lot easier.
 
-Ignore the species that have missing data for `density_log` and `mass_log`.
+To illustrate this, let's refit the model with the newly centered data.
 
 ```{r fit_center, cache = TRUE, message = FALSE, results = 'hide'}
 
@@ -200,6 +334,22 @@ m_3 <- brm(data = pantheria,
            refresh = 0)
 
 ```
+
+```{r center_print}
+
+print(m_3)
+
+```
+
+Can you explain why centering changes the value of $\alpha$ but not $\beta$? 
+
+Centering will not change our models posterior predictive performance, but really improves the interpretability of our model parameters. Centering can also be beneficial for estimating parameter values by decreasing posterior correlation amoung the parameters.
+
+I recommend always centering your (continuous) predictors.
+
+
+
+
 
 
 
