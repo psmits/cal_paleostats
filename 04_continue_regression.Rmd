@@ -1,9 +1,9 @@
 ---
 title: "Expanding on Simple Regression Models"
 output: 
-  html_document: 
-    toc: true 
-    toc_depth: 2
+html_document: 
+toc: true 
+toc_depth: 2
 ---
 
 
@@ -11,8 +11,6 @@ output:
 
 - Adding a continuous predictor
 - Interpret effects of multiple predictors in a regression.
-- Interpret predictor interactions with both discrete and continuous covariates.
-- Visualize interaction effects.
 
 
 ```{r load_packages, message = F, results = 'hide'}
@@ -26,6 +24,7 @@ library(RColorBrewer)
 
 library(brms)
 library(tidybayes)
+library(bayesplot)
 
 library(knitr)
 library(kableExtra)
@@ -37,52 +36,47 @@ theme_set(theme_bw())
 
 # Introduction
 
-In a previous lesson we introduced linear regression with a single, binary predictor. In this lesson we will be exploring more complicated forms of linear regression including continuous predictors, multiple predictors, and interactions.
-
-
-
-# Continuous predictors
-
-In out last lesson on regression we focused on linear regression with a single binary predictor. Along the way we were introduced to a notation for clearly communicating statistical models, multiple ways of summarizing our regression model fit, and the basic differences between the linear predictor of the regression model and the posterior predictive distribution of the same model.
-
-The first part of this lesson is devoted to introducing continuous predictors. Example continuous variables include measures such as height, wing length, beak depth, or shell volume.
+In a previous lesson we introduced linear regression with a single, binary predictor. In this lesson we will be expanding on this by introducing continuous predictors, and interpreting models with more than one predictor. 
 
 
 ## Our first example
 
-
-In our analyses today we will be using the [PanTHERIA}](http://www.esapubs.org/archive/ecol/E090/184/default.htm) database, a large collection of trait data for extant mammals. You can review the [data dictionary](http://esapubs.org/archive/ecol/E090/184/metadata.htm) for explinations of each variable. Missing data is coded as -999.00, something we can use when importing our data. Also, a lot of the variables have terrible names with lots of punction, captial letters and numbers -- all of these are very bad to program around. 
+For this lesson we will be using fitting models to data from the [PanTHERIA}](http://www.esapubs.org/archive/ecol/E090/184/default.htm) database, a large collection of trait data for extant mammals. For a more detailed explanation of the dataset and each variable, you can review the [data dictionary](http://esapubs.org/archive/ecol/E090/184/metadata.htm). A key detail to PanTHERIA is that missing data is coded as -999.00 and not as NA or blank cells. This knowledge is something we can use when importing our data so that it translates easily into the R environment. Also, a lot of the variables have terrible names with mixed unction, capital letters, and begin with numbers -- all of these are very bad to program around and need to be dealt with (using the `janitor` package).
 
 That all being said, let's import the dataset, clean it up a bit, and then start visualizing it.
 ```{r pantheria}
 
 pantheria <- read_tsv(here('PanTHERIA_1-0_WR05_Aug2008.txt'), 
-											na = '-999.00') %>%
-	clean_names() %>% 
-	mutate(mass_log = log(x5_1_adult_body_mass_g),
-         range_group_log = log(x22_1_home_range_km2),
-         range_indiv_log = log(x22_2_home_range_indiv_km2),
-         density_log = log(x21_1_population_density_n_km2),
-         activity_cycle = case_when(x1_1_activity_cycle == 1 ~ 'nocturnal',
-                                    x1_1_activity_cycle == 2 ~ 'mixed',
-                                    x1_1_activity_cycle == 3 ~ 'diurnal')) 
+                      na = '-999.00') %>%
+clean_names() %>% 
+mutate(mass_log = log(x5_1_adult_body_mass_g),
+       range_group_log = log(x22_1_home_range_km2),
+       range_indiv_log = log(x22_2_home_range_indiv_km2),
+       density_log = log(x21_1_population_density_n_km2),
+       activity_cycle = case_when(x1_1_activity_cycle == 1 ~ 'nocturnal',
+                                  x1_1_activity_cycle == 2 ~ 'mixed',
+                                  x1_1_activity_cycle == 3 ~ 'diurnal'),
+       trophic_level = case_when(x6_2_trophic_level == 1 ~ 'herbivore',
+                                 x6_2_trophic_level == 2 ~ 'omnivore',
+                                 x6_2_trophic_level == 2 ~ 'carnivore'))
+
 ```
 
 ```{r pantheria_plot1}
 
 pantheria %>%
-	drop_na(activity_cycle) %>%
-	ggplot(aes(x = activity_cycle, 
-						 y = range_group_log)) +
-  geom_violin(fill = 'grey80', 
-							draw_quantiles = c(0.1, 0.5, 0.9)) +
-  geom_jitter(height = 0,
-              alpha = 0.5,
-              mapping = aes(colour = msw05_order)) +
-  scale_colour_viridis(discrete = TRUE, name = 'Order') +
-  labs(x = 'Activity Cycle', 
-       y = expression(paste('Group range size ', log(km^2))),
-       title = 'Group range size differences between activity cycles, \norders highlighted')
+  drop_na(activity_cycle) %>%
+  ggplot(aes(x = trophic_level, 
+             y = range_group_log)) +
+geom_violin(fill = 'grey80', 
+            draw_quantiles = c(0.1, 0.5, 0.9)) +
+geom_jitter(height = 0,
+            alpha = 0.5,
+            mapping = aes(colour = msw05_order)) +
+scale_colour_viridis(discrete = TRUE, name = 'Order') +
+labs(x = 'Activity Cycle', 
+     y = expression(paste('Group range size ', log(km^2))),
+     title = 'Group range size differences between trophic levels, \norders highlighted')
 
 ```
 
@@ -129,16 +123,19 @@ Let's implement this model in `brms`. We are going to need to ignore species tha
 
 ```{r fit_intercept, cache = TRUE, message = FALSE, results = 'hide'}
 
-m_1 <- brm(data = pantheria,
-           family = gaussian(),
-           formula = bf(density_log ~ 1),
-           prior = c(prior(normal(0, 10), class = Intercept),
-                     prior(cauchy(0, 5), class = sigma)),
-           iter = 2000,
-           warmup = 1000,
-           chains = 4,
-           cores = 4,
-           refresh = 0)
+m_1 <- 
+  pantheria %>%
+  drop_na(density_log) %>%
+  brm(data = .,
+      family = gaussian(),
+      formula = bf(density_log ~ 1),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(cauchy(0, 5), class = sigma)),
+      iter = 2000,
+      warmup = 1000,
+      chains = 4,
+      cores = 4,
+      refresh = 0)
 
 ```
 
@@ -164,16 +161,16 @@ pantheria %>%
   geom_line(stat = 'density', 
             alpha = 0.1,
             colour = 'blue') +
-  geom_line(stat = 'density',
-            data = pantheria %>% drop_na(density_log, mass_log),
-            mapping = aes(x = density_log,
-                          group = NULL),
-            colour = 'black',
-            size = 1.5) +
-  scale_y_continuous(NULL, breaks = NULL) +
-  labs(x = expression(paste('Population density  ', log(n / km^2))),
-       title = 'Population density, actual versus predicted.') +
-  NULL
+geom_line(stat = 'density',
+          data = pantheria %>% drop_na(density_log, mass_log),
+          mapping = aes(x = density_log,
+                        group = NULL),
+          colour = 'black',
+          size = 1.5) +
+scale_y_continuous(NULL, breaks = NULL) +
+labs(x = expression(paste('Population density  ', log(n / km^2))),
+     title = 'Population density, actual versus predicted.') +
+NULL
 
 ```
 
@@ -195,12 +192,14 @@ $$
 y_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
 \mu_{i} &= \alpha + \beta x_{i} \\
 \alpha &\sim \text{Normal}(0, 10) \\
-\beta &\sim \text{Normal}(0, 5) \\
+\beta &\sim \text{Normal}(-1, 5) \\
 \sigma &\sim \text{Cauchy}^{+}(0, 5) \\
 \end{align}
 $$
 
-You'll notice this model is functionally identical to our model with a single binary predictor. The difference here is that $x$ can take on values that are not just 0 and 1.
+Are the choice of priors reasonable? Take a closer look at the prior for $\beta$ -- this is a **weakly informative prior**. I'm guessing that the slope is probably negative, but allow for the possibility of a 0 or positive slope -- albeit less than that of a negative slope. Is this justified? Think of the physical definition of the variables -- what would you guess the relationship between body size and population density to be?
+
+You might notice this model is functionally identical to the model from our previous lesson where we had only a single binary predictor. The difference is all on the data end, and not the model, as $x$ can take on any value and not just 0 and 1.
 
 How do we interpret all of these parameters? Our previous lesson gave us all the information we needed to describe each parameter, but I will reiterate them here because this is really important. If we don't know what our parameters precisely mean, we cannot interpret them.
 
@@ -213,17 +212,20 @@ Let's implement this model in `brms`. Like before, we are going to ignore specie
 
 ```{r fit_predictor, cache = TRUE, message = FALSE, results = 'hide'}
 
-m_2 <- brm(data = pantheria,
-           family = gaussian(),
-           formula = bf(density_log ~ 1 + mass_log),
-           prior = c(prior(normal(0, 10), class = Intercept),
-                     prior(normal(0, 10), class = b),
-                     prior(cauchy(0, 5), class = sigma)),
-           iter = 2000,
-           warmup = 1000,
-           chains = 4,
-           cores = 4,
-           refresh = 0)
+m_2 <- 
+  pantheria %>%
+  drop_na(density_log, mass_log) %>%
+  brm(data = .,
+      family = gaussian(),
+      formula = bf(density_log ~ 1 + mass_log),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(normal(-1, 10), class = b),
+                prior(cauchy(0, 5), class = sigma)),
+      iter = 2000,
+      warmup = 1000,
+      chains = 4,
+      cores = 4,
+      refresh = 0)
 
 ```
 
@@ -233,32 +235,7 @@ print(m_2)
 
 ```
 
-Now let's see how much adding this predictor improves our ability to describe $y$. Let's look at this two ways -- posterior predictive comparison between densities of $y$ and $y^{\tilde}$, 
-
-
-```{r predictor_ppc}
-
-pantheria %>%
-  drop_na(density_log, mass_log) %>%
-  add_predicted_draws(model = m_2,
-                      n = 100) %>%
-  ungroup() %>%
-  ggplot(aes(x = .prediction, group = .draw)) +
-  geom_line(stat = 'density', 
-            alpha = 0.1,
-            colour = 'blue') +
-  geom_line(stat = 'density',
-            data = pantheria %>% drop_na(density_log, mass_log),
-            mapping = aes(x = density_log,
-                          group = NULL),
-            colour = 'black',
-            size = 1.5) +
-  scale_y_continuous(NULL, breaks = NULL) +
-  labs(x = expression(paste('Population density  ', log(n / km^2))),
-       title = 'Population density, actual versus predicted.') +
-  NULL
-
-```
+Now let's see how much adding this predictor improves our ability to describe $y$. We can also visualize our data as a scatter plot with the linear predictor overlain to demonstrate our model estimates of *mean* population density as a function of species mass.
 
 ```{r predictor_fitted}
 
@@ -271,10 +248,12 @@ pantheria %>%
   geom_line(mapping = aes(y = .value, group = .draw),
             alpha = 1 / 20,
             colour = brewer.pal(5, "Blues")[[5]]) +
-  geom_point(data = pantheria, size = 2) +
-  scale_fill_brewer()
+geom_point(data = pantheria, size = 2) +
+scale_fill_brewer()
 
 ```
+
+The previous plot only covers our model's estimates for *mean* population density but this is not all our model is telling us. As with our earlier posterior predictive comparisons from the intercept-only model, we can use the full posterior predictive distribution to compare our observed data to 100 datasets drawn from the posterior predictive distribution. Because the posterior predictive distribution also takes into account the estimated scale of our data ($\sigma$) and thus estimates individual values of $y$ and not just the expected value of $y$, these types of comparisons give us a fuller appreciation of how well our model is or is not representing out data.
 
 ```{r predictor_predicted}
 
@@ -287,22 +266,74 @@ pantheria %>%
   stat_lineribbon(mapping = aes(y = .prediction),
                   .width = c(0.9, 0.5, 0.1),
                   colour = brewer.pal(5, "Blues")[[5]]) +
-  geom_point(data = pantheria, size = 2) +
-  scale_fill_brewer()
+geom_point(data = pantheria, size = 2) +
+scale_fill_brewer()
+
+```
+
+We can also do explicit posterior predictive tests to see how well our model captures specific parts of our data such as the overall density, the median, or differences between unmodeled classes. For our first posterior predictive test, let's do a comparison between the density of our data, $y$, and the densities of 100 simulated datasets drawn from our posterior predictive distribution, $y^{\tilde}$.
+
+```{r predictor_dens_ppc}
+
+pantheria %>%
+  drop_na(density_log, mass_log) %>%
+  add_predicted_draws(model = m_2,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = .prediction, group = .draw)) +
+  geom_line(stat = 'density', 
+            alpha = 0.1,
+            colour = 'blue') +
+geom_line(stat = 'density',
+          data = pantheria %>% drop_na(density_log, mass_log),
+          mapping = aes(x = density_log,
+                        group = NULL),
+          colour = 'black',
+          size = 1.5) +
+scale_y_continuous(NULL, breaks = NULL) +
+labs(x = expression(paste('Population density  ', log(n / km^2))),
+     title = 'Population density, actual versus predicted.') +
+NULL
 
 ```
 
 
+```{r predictor_median_ppc}
+
+pantheria_summary <-
+  pantheria %>%
+  drop_na(density_log, mass_log) %>%
+  dplyr::summarize(mean = mean(density_log)) %>%
+  pull()
+
+pantheria_summary_ppc <- 
+  pantheria %>%
+  drop_na(density_log, mass_log) %>%
+  add_predicted_draws(model = m_2,
+                      n = 100) %>%
+  ungroup() %>%
+  group_by(.draw) %>%
+  dplyr::summarize(density_median_ppc = median(.prediction))
+
+med_ppc <- 
+  pantheria_summary_ppc %>%
+  dplyr::summarize(per = sum(density_median_ppc > pantheria_summary) / n()) %>%
+  pull()
+
+pantheria_summary_ppc %>%
+  ggplot(aes(x = density_median_ppc)) +
+  geom_histogram(fill = 'blue') +
+  geom_vline(xintercept = pantheria_summary,
+             size = 2) +
+labs(subtitle = paste(med_ppc, '% of estimates greater than observed'))
+
+```
+
+Given all of the above plots, in particular the posterior predictive test of how well our model reproduces the median value of the observed, it appears that while this model does slightly better job at approximating our data than our earlier model it still fails are adequately representing our data. We are failing to reproduce the multi-modality of the data. What could we do to improve our model?
 
 
 
-
-
-It appears that this model does slightly better than our earlier model, but still fails are adequately representing our data. We are failing to reproduce the multi-modality of the data. What could we do to improve our model?
-
-
-
-### Aside: Centering
+### Centering
 
 The intercept of a linear regression model is normally interpreted as the average value of $y$ when all predictors equal 0. A consequence of this definition means that the value of the intercept is frequently uninterpretable without also studying the regression coefficients. This is also the reason that we commonly need very weak priors for intercepts.
 
@@ -321,17 +352,20 @@ To illustrate this, let's refit the model with the newly centered data.
 
 ```{r fit_center, cache = TRUE, message = FALSE, results = 'hide'}
 
-m_3 <- brm(data = pantheria,
-           family = gaussian(),
-           formula = bf(density_log ~ 1 + mass_log_center),
-           prior = c(prior(normal(0, 10), class = Intercept),
-                     prior(normal(0, 10), class = b),
-                     prior(cauchy(0, 5), class = sigma)),
-           iter = 2000,
-           warmup = 1000,
-           chains = 4,
-           cores = 4,
-           refresh = 0)
+m_3 <- 
+  pantheria %>%
+  drop_na(density_log, mass_log_center) %>%
+  brm(data = .,
+      family = gaussian(),
+      formula = bf(density_log ~ 1 + mass_log_center),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(normal(1, 5), class = b),
+                prior(cauchy(0, 5), class = sigma)),
+      iter = 2000,
+      warmup = 1000,
+      chains = 4,
+      cores = 4,
+      refresh = 0)
 
 ```
 
@@ -345,7 +379,7 @@ Can you explain why centering changes the value of $\alpha$ but not $\beta$?
 
 Centering will not change our models posterior predictive performance, but really improves the interpretability of our model parameters. Centering can also be beneficial for estimating parameter values by decreasing posterior correlation amoung the parameters.
 
-I recommend always centering your (continuous) predictors.
+I recommend always centering your (continuous) predictors. 
 
 
 
@@ -369,20 +403,29 @@ $$
 
 ```{r fit_multi, cache = TRUE, message = FALSE, results = 'hide'}
 
-m_4 <- brm(data = pantheria,
-           family = gaussian(),
-           formula = bf(density_log ~ 1 + mass_log_center + activity_cycle),
-           prior = c(prior(normal(0, 10), class = Intercept),
-                     prior(normal(0, 10), class = b),
-                     prior(cauchy(0, 5), class = sigma)),
-           iter = 2000,
-           warmup = 1000,
-           chains = 4,
-           cores = 4,
-           refresh = 0)
+m_4 <- 
+  pantheria %>%
+  drop_na(density_log, mass_log_center, trophic_level) %>%
+  brm(data = .,
+      family = gaussian(),
+      formula = bf(density_log ~ 1 + mass_log_center + trophic_level),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(normal(0, 5), class = b),
+                prior(normal(-1, 5), class = b, coef = mass_log_center),
+                prior(cauchy(0, 5), class = sigma)),
+      iter = 2000,
+      warmup = 1000,
+      chains = 4,
+      cores = 4,
+      refresh = 0)
 
 ```
 
+```{r multi_print}
+
+print(m_4)
+
+```
 
 
 ## Scaling
@@ -400,17 +443,29 @@ pantheria <-
 
 ```{r fit_multiscale, cache = TRUE, message = FALSE, results = 'hide'}
 
-m_4 <- brm(data = pantheria,
-           family = gaussian(),
-           formula = bf(density_log ~ 1 + mass_log_scale + activity_cycle),
-           prior = c(prior(normal(0, 10), class = Intercept),
-                     prior(normal(0, 10), class = b),
-                     prior(cauchy(0, 5), class = sigma)),
-           iter = 2000,
-           warmup = 1000,
-           chains = 4,
-           cores = 4,
-           refresh = 0)
+m_5 <- 
+  pantheria %>%
+  drop_na(density_log, mass_log_scale, trophic_level) %>%
+  brm(data = .,
+      family = gaussian(),
+      formula = bf(density_log ~ 1 + mass_log_scale + trophic_level),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(normal(0, 5), class = b),
+                prior(normal(-1, 5), class = b, coef = mass_log_scale),
+                prior(cauchy(0, 5), class = sigma)),
+      iter = 2000,
+      warmup = 1000,
+      chains = 4,
+      cores = 4,
+      refresh = 0)
 
 ```
 
+```{r multiscale_print}
+
+print(m_5)
+
+```
+
+
+I recommend always rescaling your (continuous) predictors to have the same scale.
