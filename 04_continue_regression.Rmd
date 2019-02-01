@@ -329,7 +329,16 @@ labs(subtitle = paste(med_ppc, '% of estimates greater than observed'))
 
 ```
 
-Given all of the above plots, in particular the posterior predictive test of how well our model reproduces the median value of the observed, it appears that while this model does slightly better job at approximating our data than our earlier model it still fails are adequately representing our data. We are failing to reproduce the multi-modality of the data. What could we do to improve our model?
+```{r predictor_median_trophic_ppc}
+
+
+
+```
+
+
+
+
+Given all of the above plots, in particular the posterior predictive tests of how well our model reproduces the median value of the observed, it appears that while this model does slightly better job at approximating our data than our earlier model it still fails are adequately representing our data. We are failing to reproduce the multi-modality of the data. What could we do to improve our model?
 
 
 
@@ -385,9 +394,10 @@ I recommend always centering your (continuous) predictors.
 
 
 
-
-
 # More than one predictor
+
+Our posterior predictive analysis of our current model of population density demonstrates that it is not fully adequate at describing our data.
+
 
 
 $$
