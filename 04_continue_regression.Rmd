@@ -1,16 +1,19 @@
 ---
-title: "Expanding on Simple Regression Models"
+title: "Expanding on Simple Regression Models: continuous predictors"
 output: 
-html_document: 
-toc: true 
-toc_depth: 2
+  html_document: 
+    toc: true 
+    toc_depth: 2
 ---
 
 
 # Objectives
 
-- Adding a continuous predictor
-- Interpret effects of multiple predictors in a regression.
+In a previous lesson we introduced linear regression with a single, binary predictor. This lesson expands on that initial introduction by introducing and explaining continuous predictors. Along the way I will continue to emphasize checking the quality or adequacy of model fit as an important part of both understanding our model and improving out model.
+
+- Including a continuous predictor in a regression model.
+- Learn to interpret continuous predictors.
+- Continue to focus on evaluating model fit as major step in modeling.
 
 
 ```{r load_packages, message = F, results = 'hide'}
@@ -20,11 +23,11 @@ library(here)
 library(janitor)
 library(purrr)
 library(viridis)
-library(RColorBrewer)
 
 library(brms)
 library(tidybayes)
 library(bayesplot)
+library(modelr)
 
 library(knitr)
 library(kableExtra)
@@ -34,12 +37,8 @@ theme_set(theme_bw())
 ```
 
 
-# Introduction
 
-In a previous lesson we introduced linear regression with a single, binary predictor. In this lesson we will be expanding on this by introducing continuous predictors, and interpreting models with more than one predictor. 
-
-
-## Our first example
+# Our first example
 
 For this lesson we will be using fitting models to data from the [PanTHERIA}](http://www.esapubs.org/archive/ecol/E090/184/default.htm) database, a large collection of trait data for extant mammals. For a more detailed explanation of the dataset and each variable, you can review the [data dictionary](http://esapubs.org/archive/ecol/E090/184/metadata.htm). A key detail to PanTHERIA is that missing data is coded as -999.00 and not as NA or blank cells. This knowledge is something we can use when importing our data so that it translates easily into the R environment. Also, a lot of the variables have terrible names with mixed unction, capital letters, and begin with numbers -- all of these are very bad to program around and need to be dealt with (using the `janitor` package).
 
@@ -58,7 +57,7 @@ mutate(mass_log = log(x5_1_adult_body_mass_g),
                                   x1_1_activity_cycle == 3 ~ 'diurnal'),
        trophic_level = case_when(x6_2_trophic_level == 1 ~ 'herbivore',
                                  x6_2_trophic_level == 2 ~ 'omnivore',
-                                 x6_2_trophic_level == 2 ~ 'carnivore'))
+                                 x6_2_trophic_level == 3 ~ 'carnivore'))
 
 ```
 
@@ -68,15 +67,15 @@ pantheria %>%
   drop_na(activity_cycle) %>%
   ggplot(aes(x = trophic_level, 
              y = range_group_log)) +
-geom_violin(fill = 'grey80', 
-            draw_quantiles = c(0.1, 0.5, 0.9)) +
-geom_jitter(height = 0,
-            alpha = 0.5,
-            mapping = aes(colour = msw05_order)) +
-scale_colour_viridis(discrete = TRUE, name = 'Order') +
-labs(x = 'Activity Cycle', 
-     y = expression(paste('Group range size ', log(km^2))),
-     title = 'Group range size differences between trophic levels, \norders highlighted')
+  geom_violin(fill = 'grey80', 
+              draw_quantiles = c(0.1, 0.5, 0.9)) +
+  geom_jitter(height = 0,
+              alpha = 0.5,
+              mapping = aes(colour = msw05_order)) +
+  scale_colour_viridis(discrete = TRUE, name = 'Order') +
+  labs(x = 'Activity Cycle', 
+       y = expression(paste('Group range size ', log(km^2))),
+       title = 'Group range size differences between trophic levels, \norders highlighted')
 
 ```
 
@@ -112,20 +111,50 @@ $$
 \begin{align}
 y &\sim \text{Normal}(\mu, \sigma) \\
 \mu &\sim \text{Normal}(0, 10) \\
-\mu &\sim \text{Cauchy}^{+}(0, 10) \\
+\sigma &\sim \text{Cauchy}^{+}(0, 10) \\
 \end{align}
 $$
 
-Something is new here -- what is this Cauchy$^{+}$ distribution? What happened to our uniform prior we used last lesson? 
+Something is new here -- what is this Cauchy$^{+}$ distribution? The Cauchy distribution is a thick-tailed probability distribution closely related to the Student *t* distribution. The Cauchy$^{+}$ distribution is the half-Cauchy distribution -- this means it is only defined for all positive real values (including 0.) You can think of this distribution as a weakly regularizing prior for standard deviations -- most of the mass is concentrated towards low values and 0, but the heavy tail means there is non-zero probably of large values for $\sigma$. The half-Cauchy distribution has two parameters: location and scale. The location is the middle of the full distribution and the scale describes the "width" of heaviness of the tails. For the half-Cauchy distribution the location parameter is mostly a formality as it defines the "backstop" of the distribution -- that it is defined for values of 0 or greater.
 
-Let's implement this model in `brms`. We are going to need to ignore species that have missing data for `density_log` -- something `brms()` does automatically. Is this choice ideal? Let's assume it is for now, but if you are interested in learning more about handling missing values in our models, look up **data imputation** -- this is an advanced topic we will not be covering in these introductory lessons.
+Here is a quick visual of the Cauchy distribution's behavior as you vary the scale. The half-Cauchy is just this distribution reflected about 0.
+```{r cauchy_demo}
+
+df <- tibble(x = seq(from = -20, to = 20, by = 0.1)) %>%
+  mutate(scale_1 = dcauchy(x, location = 0, scale = 1),
+         scale_5 = dcauchy(x, location = 0, scale = 5),
+         scale_10 = dcauchy(x, location = 0, scale = 10),
+         scale_20 = dcauchy(x, location = 0, scale = 20),
+         scale_50 = dcauchy(x, location = 0, scale = 50))
+
+df %>%
+  gather(key = 'key', value = 'value', -x) %>% 
+  separate(key, c('type', 'scale')) %>%
+  mutate(scale = factor(scale, levels = sort(order(scale)))) %>%
+  ggplot(aes(x = x, y = value, colour = scale)) +
+  geom_line(size = 2) +
+  scale_y_continuous(NULL, breaks = NULL) +
+  scale_colour_viridis(discrete = TRUE) +
+  labs(colour = 'Scale') +
+  NULL
+
+```
+
+As you can see, at scales of 20 or greater the Cauchy really begins to resemble the uniform distribution but with a bump in density around 0.
+
+
+Let's implement our intercept-only model in `brms`. We are going to need to ignore species that have missing data for `density_log` -- something `brms()` can do automatically. Is getting rid of all this data ideal? Let's assume it has no effect on our results for now, but if you are interested in learning more about handling missing values in our models, look up **data imputation** -- this is an advanced topic we will not be covering in these introductory lessons. So, first we need to filter our data to just those observations with population density values. Then we can fit our model.
 
 
 ```{r fit_intercept, cache = TRUE, message = FALSE, results = 'hide'}
 
+pantheria <- 
+  pantheria %>%
+  drop_na(density_log)
+
+
 m_1 <- 
   pantheria %>%
-  drop_na(density_log) %>%
   brm(data = .,
       family = gaussian(),
       formula = bf(density_log ~ 1),
@@ -153,7 +182,6 @@ Let's compare our observed distribution of population densities versus our poste
 ```{r intercept_ppc}
 
 pantheria %>%
-  drop_na(density_log) %>%
   add_predicted_draws(model = m_1,
                       n = 100) %>%
   ungroup() %>%
@@ -161,16 +189,16 @@ pantheria %>%
   geom_line(stat = 'density', 
             alpha = 0.1,
             colour = 'blue') +
-geom_line(stat = 'density',
-          data = pantheria %>% drop_na(density_log, mass_log),
-          mapping = aes(x = density_log,
-                        group = NULL),
-          colour = 'black',
-          size = 1.5) +
-scale_y_continuous(NULL, breaks = NULL) +
-labs(x = expression(paste('Population density  ', log(n / km^2))),
-     title = 'Population density, actual versus predicted.') +
-NULL
+  geom_line(stat = 'density',
+            data = pantheria,
+            mapping = aes(x = density_log,
+                          group = NULL),
+            colour = 'black',
+            size = 1.5) +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = expression(paste('Population density  ', log(n / km^2))),
+       title = 'Population density, actual versus predicted.') +
+  NULL
 
 ```
 
@@ -178,7 +206,7 @@ While we might be describing the overall mean and standard deviation of our data
 
 
 
-## Adding a single continuous predictor
+# A single continuous predictor
 
 Just like in our previous lesson, to improve our model we're going to add a single predictor. What's new to this lesson is that that predictor is a continuous variable: average individual mass in log grams or `mass_log`. 
 
@@ -208,13 +236,15 @@ How do we interpret all of these parameters? Our previous lesson gave us all the
 - $\alpha$ intercept, average value of $y$ when $x$ = 0
 - $\beta$ slope, expected change in $y$ per unit change in $x$
 
-Let's implement this model in `brms`. Like before, we are going to ignore species that have missing data for either `density_log` or `mass_log` -- `brms()` does this for us automatically. 
+Let's implement this model in `brms`. Like before, we are going to ignore species that have missing data for either `density_log` or `mass_log` -- `brms()` can do this for us automatically, but let's do it by hand here again. So, our first set is filter down the `pantheria` tibble again and then fit our new model. We've already dropped all observations missing density values, so we just need to do the same for mass values. Conveniently, there is no harm in checking for missing `density_log` values again so that everything is clear.
 
 ```{r fit_predictor, cache = TRUE, message = FALSE, results = 'hide'}
+pantheria <- 
+  pantheria %>%
+  drop_na(density_log, mass_log)
 
 m_2 <- 
   pantheria %>%
-  drop_na(density_log, mass_log) %>%
   brm(data = .,
       family = gaussian(),
       formula = bf(density_log ~ 1 + mass_log),
@@ -235,114 +265,7 @@ print(m_2)
 
 ```
 
-Now let's see how much adding this predictor improves our ability to describe $y$. We can also visualize our data as a scatter plot with the linear predictor overlain to demonstrate our model estimates of *mean* population density as a function of species mass.
-
-```{r predictor_fitted}
-
-pantheria %>%
-  drop_na(density_log, mass_log) %>%
-  add_fitted_draws(model = m_2,
-                   n = 100) %>%
-  ungroup() %>%
-  ggplot(aes(x = mass_log, y = density_log)) +
-  geom_line(mapping = aes(y = .value, group = .draw),
-            alpha = 1 / 20,
-            colour = brewer.pal(5, "Blues")[[5]]) +
-geom_point(data = pantheria, size = 2) +
-scale_fill_brewer()
-
-```
-
-The previous plot only covers our model's estimates for *mean* population density but this is not all our model is telling us. As with our earlier posterior predictive comparisons from the intercept-only model, we can use the full posterior predictive distribution to compare our observed data to 100 datasets drawn from the posterior predictive distribution. Because the posterior predictive distribution also takes into account the estimated scale of our data ($\sigma$) and thus estimates individual values of $y$ and not just the expected value of $y$, these types of comparisons give us a fuller appreciation of how well our model is or is not representing out data.
-
-```{r predictor_predicted}
-
-pantheria %>%
-  drop_na(density_log, mass_log) %>%
-  add_predicted_draws(model = m_2,
-                      n = 100) %>%
-  ungroup() %>%
-  ggplot(aes(x = mass_log, y = density_log)) +
-  stat_lineribbon(mapping = aes(y = .prediction),
-                  .width = c(0.9, 0.5, 0.1),
-                  colour = brewer.pal(5, "Blues")[[5]]) +
-geom_point(data = pantheria, size = 2) +
-scale_fill_brewer()
-
-```
-
-We can also do explicit posterior predictive tests to see how well our model captures specific parts of our data such as the overall density, the median, or differences between unmodeled classes. For our first posterior predictive test, let's do a comparison between the density of our data, $y$, and the densities of 100 simulated datasets drawn from our posterior predictive distribution, $y^{\tilde}$.
-
-```{r predictor_dens_ppc}
-
-pantheria %>%
-  drop_na(density_log, mass_log) %>%
-  add_predicted_draws(model = m_2,
-                      n = 100) %>%
-  ungroup() %>%
-  ggplot(aes(x = .prediction, group = .draw)) +
-  geom_line(stat = 'density', 
-            alpha = 0.1,
-            colour = 'blue') +
-geom_line(stat = 'density',
-          data = pantheria %>% drop_na(density_log, mass_log),
-          mapping = aes(x = density_log,
-                        group = NULL),
-          colour = 'black',
-          size = 1.5) +
-scale_y_continuous(NULL, breaks = NULL) +
-labs(x = expression(paste('Population density  ', log(n / km^2))),
-     title = 'Population density, actual versus predicted.') +
-NULL
-
-```
-
-
-```{r predictor_median_ppc}
-
-pantheria_summary <-
-  pantheria %>%
-  drop_na(density_log, mass_log) %>%
-  dplyr::summarize(mean = mean(density_log)) %>%
-  pull()
-
-pantheria_summary_ppc <- 
-  pantheria %>%
-  drop_na(density_log, mass_log) %>%
-  add_predicted_draws(model = m_2,
-                      n = 100) %>%
-  ungroup() %>%
-  group_by(.draw) %>%
-  dplyr::summarize(density_median_ppc = median(.prediction))
-
-med_ppc <- 
-  pantheria_summary_ppc %>%
-  dplyr::summarize(per = sum(density_median_ppc > pantheria_summary) / n()) %>%
-  pull()
-
-pantheria_summary_ppc %>%
-  ggplot(aes(x = density_median_ppc)) +
-  geom_histogram(fill = 'blue') +
-  geom_vline(xintercept = pantheria_summary,
-             size = 2) +
-labs(subtitle = paste(med_ppc, '% of estimates greater than observed'))
-
-```
-
-```{r predictor_median_trophic_ppc}
-
-
-
-```
-
-
-
-
-Given all of the above plots, in particular the posterior predictive tests of how well our model reproduces the median value of the observed, it appears that while this model does slightly better job at approximating our data than our earlier model it still fails are adequately representing our data. We are failing to reproduce the multi-modality of the data. What could we do to improve our model?
-
-
-
-### Centering
+## Aside: Centering
 
 The intercept of a linear regression model is normally interpreted as the average value of $y$ when all predictors equal 0. A consequence of this definition means that the value of the intercept is frequently uninterpretable without also studying the regression coefficients. This is also the reason that we commonly need very weak priors for intercepts.
 
@@ -351,9 +274,10 @@ A trick for improving our interpretation of the intercept $\alpha$ is **centerin
 
 pantheria <- 
   pantheria %>%
-  mutate(mass_log_center = mass_log - mean(mass_log, na.rm = TRUE))
+  mutate(mass_log_center = mass_log - mean(mass_log))
 
 ```
+
 
 $\alpha$ is still the expected value of the outcome variable when the predictor is equal to zero. But now the mean value of the predictor is also zero. So the intercept all means: the expected value of the outcome, when the predictor is at its average value. This makes interpreting the intercept a lot easier.
 
@@ -363,7 +287,6 @@ To illustrate this, let's refit the model with the newly centered data.
 
 m_3 <- 
   pantheria %>%
-  drop_na(density_log, mass_log_center) %>%
   brm(data = .,
       family = gaussian(),
       formula = bf(density_log ~ 1 + mass_log_center),
@@ -386,96 +309,176 @@ print(m_3)
 
 Can you explain why centering changes the value of $\alpha$ but not $\beta$? 
 
-Centering will not change our models posterior predictive performance, but really improves the interpretability of our model parameters. Centering can also be beneficial for estimating parameter values by decreasing posterior correlation amoung the parameters.
+Centering will not change our models posterior predictive performance, but really improves the interpretability of our model parameters. Centering can also be beneficial for estimating parameter values by decreasing posterior correlation among the parameters.
 
 I recommend always centering your (continuous) predictors. 
 
 
+## Checking model fit
 
+Now let's see how much adding this predictor improves our ability to describe $y$. We can also visualize our data as a scatter plot with the linear predictor overlain to demonstrate our model estimates of *mean* population density as a function of species mass.
 
+```{r predictor_fitted}
 
-# More than one predictor
+pantheria %>%
+  add_fitted_draws(model = m_3,
+                   n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = mass_log_center, y = density_log)) +
+  geom_line(mapping = aes(y = .value, group = .draw),
+            alpha = 1 / 20,
+            colour = 'blue') +
+  geom_point(data = pantheria, size = 2) +
+  scale_fill_brewer()
 
-Our posterior predictive analysis of our current model of population density demonstrates that it is not fully adequate at describing our data.
+```
 
+The previous plot only covers our model's estimates for *mean* population density but this is not all our model is telling us. As with our earlier posterior predictive comparisons from the intercept-only model, we can use the full posterior predictive distribution to compare our observed data to 100 datasets drawn from the posterior predictive distribution. Because the posterior predictive distribution also takes into account the estimated scale of our data ($\sigma$) and thus estimates individual values of $y$ and not just the expected value of $y$, these types of comparisons give us a fuller appreciation of how well our model is or is not representing out data.
 
+```{r predictor_predicted}
 
-$$
-\begin{align}
-y_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
-\mu_{i} &= \alpha + \beta_{1} m_{i} + \beta_{2} o_{i} + \beta_{3} n_{i} \\
-\alpha &\sim \text{Normal}(0, 10) \\
-\beta &\sim \text{Normal}(0, 5) \\
-\sigma &\sim \text{Cauchy}^{+}(0, 5) \\
-\end{align}
-$$
+pantheria %>%
+  data_grid(mass_log_center = seq_range(mass_log_center, n = 1000)) %>%
+  add_predicted_draws(model = m_3,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = mass_log_center, y = density_log)) +
+  stat_lineribbon(mapping = aes(y = .prediction),
+                  .width = c(0.9, 0.5, 0.1),
+                  colour = 'blue') +
+  geom_point(data = pantheria, size = 2) +
+  scale_fill_brewer() +
+  NULL
 
+```
 
-```{r fit_multi, cache = TRUE, message = FALSE, results = 'hide'}
+We can also do explicit posterior predictive tests to see how well our model captures specific parts of our data such as the overall density, the median, or differences between unmodeled classes. For our first posterior predictive test, let's do a comparison between the density of our data, $y$, and the densities of 100 simulated datasets drawn from our posterior predictive distribution, $y^{\tilde}$.
 
-m_4 <- 
+```{r predictor_dens_ppc}
+
+pantheria %>%
+  add_predicted_draws(model = m_3,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = .prediction, group = .draw)) +
+  geom_line(stat = 'density', 
+            alpha = 0.1,
+            colour = 'blue') +
+  geom_line(stat = 'density',
+            data = pantheria,
+            mapping = aes(x = density_log,
+                          group = NULL),
+            colour = 'black',
+            size = 1.5) +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = expression(paste('Population density  ', log(n / km^2))),
+       title = 'Population density, actual versus predicted.') +
+  NULL
+
+```
+
+Let's then see how well our model reproduces the median population density even though our model is defined for the mean of population density.
+
+```{r predictor_median_ppc}
+
+pantheria_summary <-
   pantheria %>%
-  drop_na(density_log, mass_log_center, trophic_level) %>%
-  brm(data = .,
-      family = gaussian(),
-      formula = bf(density_log ~ 1 + mass_log_center + trophic_level),
-      prior = c(prior(normal(0, 10), class = Intercept),
-                prior(normal(0, 5), class = b),
-                prior(normal(-1, 5), class = b, coef = mass_log_center),
-                prior(cauchy(0, 5), class = sigma)),
-      iter = 2000,
-      warmup = 1000,
-      chains = 4,
-      cores = 4,
-      refresh = 0)
+  dplyr::summarize(median = median(density_log)) %>%
+  pull()
 
-```
-
-```{r multi_print}
-
-print(m_4)
-
-```
-
-
-## Scaling
-
-
-```{r scale}
-
-pantheria <- 
+pantheria_summary_ppc <- 
   pantheria %>%
-  drop_na(mass_log) %>%
-  mutate(mass_log_scale = scale(mass_log, center = TRUE, scale = TRUE))
+  add_predicted_draws(model = m_3,
+                      n = 100) %>%
+  ungroup() %>%
+  group_by(.draw) %>%
+  dplyr::summarize(density_median_ppc = median(.prediction))
+
+med_ppc <- 
+  pantheria_summary_ppc %>%
+  dplyr::summarize(per = sum(density_median_ppc > pantheria_summary) / n()) %>%
+  pull()
+
+pantheria_summary_ppc %>%
+  ggplot(aes(x = density_median_ppc)) +
+  geom_histogram(fill = 'blue') +
+  geom_vline(xintercept = pantheria_summary, size = 2) +
+  labs(subtitle = paste(med_ppc, '% of estimates greater than observed'),
+       x = 'Median population density', y = '')
 
 ```
 
+Let's see if our model can reproduce the differences in population density between trophic levels even though that information was not included in our model. This requires us dropping a bit more of our data because trophic level is not assigned for as many species as density or body mass.
 
-```{r fit_multiscale, cache = TRUE, message = FALSE, results = 'hide'}
+```{r predictor_median_trophic_ppc}
 
-m_5 <- 
+pan_cut <- 
   pantheria %>%
-  drop_na(density_log, mass_log_scale, trophic_level) %>%
-  brm(data = .,
-      family = gaussian(),
-      formula = bf(density_log ~ 1 + mass_log_scale + trophic_level),
-      prior = c(prior(normal(0, 10), class = Intercept),
-                prior(normal(0, 5), class = b),
-                prior(normal(-1, 5), class = b, coef = mass_log_scale),
-                prior(cauchy(0, 5), class = sigma)),
-      iter = 2000,
-      warmup = 1000,
-      chains = 4,
-      cores = 4,
-      refresh = 0)
+  drop_na(density_log, mass_log_center, trophic_level)
+
+pan_trophic_summary <- 
+  pan_cut %>%
+  group_by(trophic_level) %>%
+  dplyr::summarize(median = median(density_log))
+
+pan_trophic_summary_ppc <- 
+  pan_cut %>%
+  add_predicted_draws(model = m_3,
+                      n = 100) %>%
+  ungroup() %>%
+  group_by(.draw, trophic_level) %>%
+  dplyr::summarize(density_median_ppc = median(.prediction))
+
+pan_trophic_summary_ppc %>%
+  ggplot(aes(x = density_median_ppc)) +
+  geom_histogram(fill = 'blue') +
+  geom_vline(data = pan_trophic_summary,
+             mapping = aes(xintercept = median),
+             size = 2) +
+  facet_grid(~ trophic_level) +
+  labs(x = 'Median population density', y = '') +
+  NULL
+```
+
+Or we can even look at how well our posterior predictive distribution does across the different trophic levels, even though those are not encoded in the model.
+
+```{r predictor_pred_trophic}
+
+pan_cut <- 
+  pantheria %>%
+  drop_na(density_log, mass_log_center, trophic_level)
+
+pan_cut %>%
+  data_grid(mass_log_center = seq_range(mass_log_center, n = 1000),
+            trophic_level) %>%
+  add_predicted_draws(model = m_3,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = mass_log_center, y = density_log)) +
+  stat_lineribbon(mapping = aes(y = .prediction),
+                  .width = c(0.9, 0.5, 0.1),
+                  colour = 'blue') +
+  geom_point(data = pan_cut, size = 2) +
+  scale_fill_brewer() +
+  facet_grid(~ trophic_level) +
+  NULL
 
 ```
 
-```{r multiscale_print}
-
-print(m_5)
-
-```
+While our model does an okay job at predicting median population density of omnivores and herbivores, it is very bad at estimating the population density of carnivores. 
 
 
-I recommend always rescaling your (continuous) predictors to have the same scale.
+Given all of the above plots, in particular the failure of our model to capture the differences between the (unmodeled) trophic levels, it appears that while this model does slightly better job at approximating our data than our earlier model it still fails are adequately representing our data. Even though we did not model the differences between the trophic groups, by seeing if our model captures these differences we get a better idea about how we might improve our model. In this case, because we know that while there are differences between trophic groups, these differences are not captured by the model. If we want to make sure we are describing the different sources of variation, we might want to include the tropic levels as additional predictors on top of body size.
+
+But what is this about adding more predictors? What does that mean? That is the subject of our next lesson.
+
+
+
+
+
+# Summary
+
+In this lesson we introduced continuous predictors in linear regression. We also covered a lot of examples of how to inspect your model's adequacy at describing our data. This process involved checking our model's ability to represent unmodeled variation in the data that we know about but that our model does not. Our next step will be including these previously unmodeled factors in a new expanded model. In our next lesson we will cover multivariate models, or models with more than one predictor (e.g body mass AND trophic level).
+
+
+

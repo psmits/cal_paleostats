@@ -1,0 +1,230 @@
+---
+title: "Expanding on Simple Regression Models: continuous predictors"
+output: 
+  html_document: 
+    toc: true 
+    toc_depth: 2
+---
+
+
+# Objectives
+
+```{r load_packages, message = F, results = 'hide'}
+
+library(tidyverse)
+library(here)
+library(janitor)
+library(purrr)
+library(viridis)
+
+library(brms)
+library(tidybayes)
+library(bayesplot)
+library(modelr)
+
+library(knitr)
+library(kableExtra)
+
+theme_set(theme_bw())
+
+```
+
+```{r pantheria}
+
+pantheria <- read_tsv(here('PanTHERIA_1-0_WR05_Aug2008.txt'), 
+                      na = '-999.00') %>%
+  clean_names() %>% 
+  mutate(mass_log = log(x5_1_adult_body_mass_g),
+         range_group_log = log(x22_1_home_range_km2),
+         range_indiv_log = log(x22_2_home_range_indiv_km2),
+         density_log = log(x21_1_population_density_n_km2),
+         activity_cycle = case_when(x1_1_activity_cycle == 1 ~ 'nocturnal',
+                                    x1_1_activity_cycle == 2 ~ 'mixed',
+                                    x1_1_activity_cycle == 3 ~ 'diurnal'),
+         trophic_level = case_when(x6_2_trophic_level == 1 ~ 'herbivore',
+                                   x6_2_trophic_level == 2 ~ 'omnivore',
+                                   x6_2_trophic_level == 3 ~ 'carnivore'))
+
+```
+
+
+
+
+# More than one predictor
+
+The posterior predictive analysis of our model of population density with only body mass as a predictor demonstrates that this model does not adequately describe the data. We were able to do this by asking if our model is able to describe differences in the data that we know about but that our model does not (e.g. trophic level).
+
+So far all of the linear regression models we have encountered have either been intercept-only or with a single predictor. What does it mean 
+
+
+$$
+\begin{align}
+y_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
+\mu_{i} &= \alpha + \beta_{1} m_{i} + \beta_{2} o_{i} + \beta_{3} h_{i} \\
+\alpha &\sim \text{Normal}(0, 10) \\
+\beta &\sim \text{Normal}(0, 5) \\
+\sigma &\sim \text{Cauchy}^{+}(0, 5) \\
+\end{align}
+$$
+
+
+```{r fit_multi, cache = TRUE, message = FALSE, results = 'hide'}
+
+pantheria <- 
+  pantheria %>%
+  drop_na(density_log, mass_log, trophic_level) %>%
+  mutate(mass_log_center = mass_log - mean(mass_log))
+
+m_4 <- 
+  pantheria %>%
+  brm(data = .,
+      family = gaussian(),
+      formula = bf(density_log ~ 1 + mass_log_center + trophic_level),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(normal(0, 5), class = b),
+                prior(normal(-1, 5), class = b, coef = mass_log_center),
+                prior(cauchy(0, 5), class = sigma)),
+      iter = 2000,
+      warmup = 1000,
+      chains = 4,
+      cores = 4,
+      refresh = 0)
+
+```
+
+```{r multi_print}
+
+print(m_4)
+
+```
+
+
+## Aside: Standardizing 
+
+
+```{r stan}
+
+pantheria <- 
+  pantheria %>%
+  drop_na(density_log, mass_log, trophic_level) %>%
+  mutate(mass_log_stan = scale(mass_log, center = TRUE, scale = TRUE))
+
+```
+
+
+```{r fit_multistan, cache = TRUE, message = FALSE, results = 'hide'}
+
+m_5 <- 
+  pantheria %>%
+  brm(data = .,
+      family = gaussian(),
+      formula = bf(density_log ~ 1 + mass_log_stan+ trophic_level),
+      prior = c(prior(normal(0, 10), class = Intercept),
+                prior(normal(0, 5), class = b),
+                prior(normal(-1, 5), class = b, coef = mass_log_stan),
+                prior(cauchy(0, 5), class = sigma)),
+      iter = 2000,
+      warmup = 1000,
+      chains = 4,
+      cores = 4,
+      refresh = 0)
+
+```
+
+```{r multistan_print}
+
+print(m_5)
+
+```
+
+I recommend always rescaling your (continuous) predictors to have the same scale.
+
+
+## Checking model fit
+
+```{r multi_fitted}
+
+pantheria %>%
+  add_fitted_draws(model = m_5,
+                   n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = mass_log_stan, y = density_log)) +
+  geom_line(mapping = aes(y = .value, group = .draw),
+            alpha = 1 / 20,
+            colour = 'blue') +
+  geom_point(data = pantheria, size = 2) +
+  scale_fill_brewer() +
+  facet_grid(~ trophic_level) +
+  NULL
+
+```
+
+```{r multi_predicted}
+
+pantheria %>%
+  data_grid(mass_log_stan = seq_range(mass_log_stan, n = 1000),
+            trophic_level) %>%
+  add_predicted_draws(model = m_5,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = mass_log_stan, y = density_log)) +
+  stat_lineribbon(mapping = aes(y = .prediction),
+                  .width = c(0.9, 0.5, 0.1),
+                  colour = 'blue') +
+  geom_point(data = pantheria, size = 2) +
+  scale_fill_brewer() +
+  facet_grid(~ trophic_level) +
+  NULL
+
+```
+
+```{r multi_dens_ppc}
+
+pantheria %>%
+  add_predicted_draws(model = m_5,
+                      n = 100) %>%
+  ungroup() %>%
+  ggplot(aes(x = .prediction, group = .draw)) +
+  geom_line(stat = 'density',
+            alpha = 0.1,
+            colour = 'blue') +
+  geom_line(stat = 'density',
+            data = pantheria,
+            mapping = aes(x = density_log,
+                          group = NULL),
+            colour = 'black',
+            size = 1.5) +
+  scale_y_continuous(NULL, breaks = NULL) +
+  labs(x = expression(paste('Population density ', log(n / km^2))),
+       title = 'Population density, actual versus predicted') +
+  NULL
+
+
+```
+
+```{r median_ppc}
+
+pan_trophic_summary <-
+  pantheria %>%
+  group_by(trophic_level) %>%
+  dplyr::summarize(median = median(density_log))
+
+pantheria_summary_ppc <- 
+  pantheria %>%
+  add_predicted_draws(model = m_5,
+                      n = 100) %>%
+  ungroup() %>%
+  group_by(.draw, trophic_level) %>%
+  dplyr::summarize(density_median_ppc = median(.prediction))
+
+pantheria_summary_ppc %>%
+  ggplot(aes(x = density_median_ppc)) +
+  geom_histogram(fill = 'blue') +
+  geom_vline(data = pan_trophic_summary,
+             mapping = aes(xintercept = median),
+             size = 2) +
+  facet_grid(~ trophic_level) +
+  labs(x = 'Median population density', y = '') +
+  NULL
+
+```
