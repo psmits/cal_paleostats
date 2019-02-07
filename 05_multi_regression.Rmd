@@ -1,5 +1,5 @@
 ---
-title: "Expanding on Simple Regression Models: continuous predictors"
+title: "Multiple predictors and interactions in linear regression"
 output: 
   html_document: 
     toc: true 
@@ -8,6 +8,13 @@ output:
 
 
 # Objectives
+
+- Interpret regression models with a categorical predictor that has more than two levels.
+- Learn to interpret regression models with more than one predictor.
+- Introduce statistical interactions in regression models.
+- Cover strategies for visualizing multivariate regression models.
+
+
 
 ```{r load_packages, message = F, results = 'hide'}
 
@@ -28,6 +35,8 @@ library(kableExtra)
 theme_set(theme_bw())
 
 ```
+
+We're going to be using the PanTHERIA dataset like we did in the previous lesson. Just like last time, here is a quick clean up of the dataset before we do anything "principled."
 
 ```{r pantheria}
 
@@ -52,9 +61,56 @@ pantheria <- read_tsv(here('PanTHERIA_1-0_WR05_Aug2008.txt'),
 
 # More than one predictor
 
-The posterior predictive analysis of our model of population density with only body mass as a predictor demonstrates that this model does not adequately describe the data. We were able to do this by asking if our model is able to describe differences in the data that we know about but that our model does not (e.g. trophic level).
 
-So far all of the linear regression models we have encountered have either been intercept-only or with a single predictor. What does it mean 
+So far all of the linear regression models we have encountered have either been intercept-only or with a single predictor. For this lesson we're going to continue our focus on three variables from the PanTHERIA dataset: population density, body size, and trophic level. Population density, measured as the number of individuals per square-kilometer, is our variable of interest -- we want to define a model which describes how population density varies between mammal species. We have previously investigated body size as a predictor of population density, but the posterior predictive analysis of our model of population density with only body mass as a predictor demonstrates that this model does not adequately describe the data. We were able to do this by asking if our model is able to describe differences in the data that we know about but that our model does not (e.g. trophic level).
+
+## Categorical predictor
+
+Trophic level is a categorical predictor with three levels. The previous categorical predictor we dealt with (Bivalve versus Brachiopod) was binary which made it very easy to interpret. In that lesson I briefly introduced the idea of dummy coding and demonstrated how that would work with a three level categorical variable. I'm going to reiterate and expand on that demonstration here.
+
+`brm`, and R in general, will automatically translate categorical predictors like our `trophic_level` variable into what's called *dummy coding*. 
+
+When we dummy code a categorical variable what we are doing is turning one variable with $k$ states into $k - 1$ binary variables. One state of the categorical variable is considered the "baseline" or the default condition for any observation. The other $k - 1$ binary variables then describe if the observation is different from the default. The standard behavior for this in R is that the first state, alphabetically, is made the baseline.  Here is this in action:
+```{r dummy}
+
+pantheria %>%
+  drop_na(trophic_level) %>%
+  model_matrix(~ trophic_level) %>%
+  top_n(10) %>%
+  kable() %>%
+  kableExtra::kable_styling()
+
+```
+TO DO
+This choice isn't necessarily always the best, for example when that state is very rare, and there are a lot of ways to manipulate this behavior. For example, for our `trophic_level` variable, it might best to have the default be "omnivore" instead of "carnivore."
+
+
+
+There are [many other strategies for encoding categorical variables](https://stats.idre.ucla.edu/r/library/r-library-contrast-coding-systems-for-categorical-variables/), but dummy coding is by far the most common -- it helps that it is the R default.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 $$
@@ -68,6 +124,13 @@ y_{i} &\sim \text{Normal}(\mu_{i}, \sigma) \\
 $$
 
 
+
+
+
+## Fitting model in `brms`
+
+First, like we discussed and demonstrated in last lesson, let's center our continuous predictor `mass_log`. Then we can fit our model with a more interpretable intercept.
+
 ```{r fit_multi, cache = TRUE, message = FALSE, results = 'hide'}
 
 pantheria <- 
@@ -75,7 +138,7 @@ pantheria <-
   drop_na(density_log, mass_log, trophic_level) %>%
   mutate(mass_log_center = mass_log - mean(mass_log))
 
-m_4 <- 
+m_1 <- 
   pantheria %>%
   brm(data = .,
       family = gaussian(),
@@ -94,7 +157,7 @@ m_4 <-
 
 ```{r multi_print}
 
-print(m_4)
+print(m_1)
 
 ```
 
@@ -114,7 +177,7 @@ pantheria <-
 
 ```{r fit_multistan, cache = TRUE, message = FALSE, results = 'hide'}
 
-m_5 <- 
+m_2 <- 
   pantheria %>%
   brm(data = .,
       family = gaussian(),
@@ -133,7 +196,7 @@ m_5 <-
 
 ```{r multistan_print}
 
-print(m_5)
+print(m_2)
 
 ```
 
@@ -145,7 +208,7 @@ I recommend always rescaling your (continuous) predictors to have the same scale
 ```{r multi_fitted}
 
 pantheria %>%
-  add_fitted_draws(model = m_5,
+  add_fitted_draws(model = m_2,
                    n = 100) %>%
   ungroup() %>%
   ggplot(aes(x = mass_log_stan, y = density_log)) +
@@ -164,7 +227,7 @@ pantheria %>%
 pantheria %>%
   data_grid(mass_log_stan = seq_range(mass_log_stan, n = 1000),
             trophic_level) %>%
-  add_predicted_draws(model = m_5,
+  add_predicted_draws(model = m_2,
                       n = 100) %>%
   ungroup() %>%
   ggplot(aes(x = mass_log_stan, y = density_log)) +
@@ -181,7 +244,7 @@ pantheria %>%
 ```{r multi_dens_ppc}
 
 pantheria %>%
-  add_predicted_draws(model = m_5,
+  add_predicted_draws(model = m_2,
                       n = 100) %>%
   ungroup() %>%
   ggplot(aes(x = .prediction, group = .draw)) +
@@ -211,7 +274,7 @@ pan_trophic_summary <-
 
 pantheria_summary_ppc <- 
   pantheria %>%
-  add_predicted_draws(model = m_5,
+  add_predicted_draws(model = m_2,
                       n = 100) %>%
   ungroup() %>%
   group_by(.draw, trophic_level) %>%
@@ -228,3 +291,8 @@ pantheria_summary_ppc %>%
   NULL
 
 ```
+
+
+
+
+# Interactions
